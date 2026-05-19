@@ -18,8 +18,8 @@ namespace FinanceTracker.Api.Services
                 b.Id != budgetId &&
                 b.CategoryId == categoryId &&
                 b.Month.Month == month &&
-                b.Month.Year == year &&
-                b.UserId == userId))
+                b.Month.Year == year,
+                userId))
             {
                 throw new BadHttpRequestException("Budget for the given month already exists.");
             }
@@ -63,7 +63,7 @@ namespace FinanceTracker.Api.Services
            var categoryId = transaction.CategoryId;
            var amount = transaction.Amount;
 
-           if (!await categoryRepo.AnyAsync(c => c.Id == categoryId && c.UserId == userId))
+           if (!await categoryRepo.AnyAsync(c => c.Id == categoryId, userId))
             {
                 throw new KeyNotFoundException("Given category does not exist.");
             }
