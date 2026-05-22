@@ -24,4 +24,5 @@ jobs:
         run: dotnet build src/backend/FinanceTracker.sln --no-restore --configuration Release
 
       - name: Test
-        run: dotnet test src/backend/FinanceTracker.Tests/FinanceTracker.Tests.csproj --no-build --verbosity normal
+        run: dotnet test src/backend/FinanceTracker.Tests/FinanceTracker.Tests.csproj --verbosity normal
+s
