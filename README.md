@@ -1,3 +1,5 @@
+![.NET Core Build and Test](https://github.com/michalkosiec/finance-tracker/actions/workflows/dotnet.yml/badge.svg)
+
 # Finance Tracker
 
 A modern, containerized REST API for personal finance management.
