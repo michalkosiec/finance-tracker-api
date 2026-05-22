@@ -10,45 +10,45 @@ namespace FinanceTracker.Api.Repositories
     {
          public async Task<IEnumerable<T>> GetAllAsync(Guid userID)
         {
-            return await context.Set<T>().AsNoTracking().Where(e => e.UserId == userID).ToListAsync();
+            return await _context.Set<T>().AsNoTracking().Where(e => e.UserId == userID).ToListAsync();
         }
 
         public async Task<T?> GetByIdAsync(Guid id, Guid userId)
         {
-            return await context.Set<T>().AsNoTracking().FirstOrDefaultAsync(e => e.UserId == userId && e.Id == id);
+            return await _context.Set<T>().AsNoTracking().FirstOrDefaultAsync(e => e.UserId == userId && e.Id == id);
         }
 
         public async Task<T?> GetFirstOrDefaultByAsync(Expression<Func<T, bool>> predicate, Guid userId)
         {
-            return await context.Set<T>().Where(e => e.UserId == userId).FirstOrDefaultAsync(predicate);
+            return await _context.Set<T>().Where(e => e.UserId == userId).FirstOrDefaultAsync(predicate);
         }
 
         public async Task<bool> AnyAsync(Expression<Func<T, bool>> predicate, Guid userId)
         {
-            return await context.Set<T>().Where(e => e.UserId == userId).AnyAsync(predicate);
+            return await _context.Set<T>().Where(e => e.UserId == userId).AnyAsync(predicate);
         }
 
         public async Task UpdateAsync(T entity, Guid userId)
         {
             if (entity.UserId != userId) throw new UnauthorizedAccessException("You are not authorized to edit this data.");
 
-            context.Set<T>().Update(entity);
+            _context.Set<T>().Update(entity);
             await SaveChanges();
         }
 
         public async Task DeleteAsync(Guid id, Guid userId)
         {
-            var entity = await context.Set<T>().FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId);
+            var entity = await _context.Set<T>().FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId);
             if (entity != null)
             {
-                context.Set<T>().Remove(entity);
+                _context.Set<T>().Remove(entity);
                 await SaveChanges();
             }
         }
 
-        public async Task CreateAsync(T entity)
+        public new async Task CreateAsync(T entity)
         {
-            await context.Set<T>().AddAsync(entity);
+            await _context.Set<T>().AddAsync(entity);
             await SaveChanges();
         }
     }

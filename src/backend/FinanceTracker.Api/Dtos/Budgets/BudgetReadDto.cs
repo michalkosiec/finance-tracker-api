@@ -17,7 +17,7 @@ namespace FinanceTracker.Api.Dtos.Budgets
         public decimal LimitAmount { get; set; }
 
         [Required]
-        public string Month { get; set; }
+        public string Month { get; set; } = string.Empty;
 
         [Required]
         public DateTimeOffset CreatedAt { get; set; }

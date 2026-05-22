@@ -21,7 +21,7 @@ namespace FinanceTracker.Api.Models
 
         [Required]
         [StringLength(100, MinimumLength = 3, ErrorMessage = "Transaction name must be between {2} and {1} characters.")]
-        public string Name {get; set;}
+        public string Name {get; set;} = string.Empty;
 
         [Required]
         [Column(TypeName = "decimal(12,2)")]
@@ -30,7 +30,7 @@ namespace FinanceTracker.Api.Models
 
         [Required]
         [StringLength(3, MinimumLength = 3, ErrorMessage = "Currency must be exactly {1} characters.")]
-        public string Currency {get; set;}
+        public string Currency {get; set;} = string.Empty;
 
         [Required]
         public Guid CategoryId {get; set;}

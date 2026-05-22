@@ -12,13 +12,13 @@ namespace FinanceTracker.Api.Dtos.Transactions
         public Guid UserId {get; set;}
 
         [Required]
-        public string Name {get; set;}
+        public string Name {get; set;} = string.Empty;
 
         [Required]
         public decimal Amount {get; set;}
 
         [Required]
-        public string Currency {get; set;}
+        public string Currency {get; set;} = string.Empty;
 
         [Required]
         public Guid CategoryId {get; set;}
@@ -30,7 +30,7 @@ namespace FinanceTracker.Api.Dtos.Transactions
         public TransactionType Type {get; set;}
 
         [Required]
-        public string Title {get; set;}
+        public string Title {get; set;} = string.Empty;
 
         [Required]
         public DateTimeOffset CreatedAt {get; set;}

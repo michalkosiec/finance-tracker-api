@@ -11,13 +11,13 @@ namespace FinanceTracker.Api.Dtos.Categories
         public Guid UserId { get; set; }
 
         [Required]
-        public string Name {get; set;}
+        public string Name {get; set;} = string.Empty;
 
         [Required]
-        public string Icon {get; set;}
+        public string Icon {get; set;} = string.Empty;
 
         [Required]
-        public string Color {get; set;}
+        public string Color {get; set;} = string.Empty;
 
         [Required]
         public DateTimeOffset CreatedAt {get; set;}

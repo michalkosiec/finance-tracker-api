@@ -15,6 +15,6 @@ namespace FinanceTracker.Api.Dtos.Budgets
 
         [Required(AllowEmptyStrings = false, ErrorMessage = "Month is required.")]
         [YearMonth]
-        public string Month { get; set; }
+        public string Month { get; set; } = string.Empty;
     }
 }

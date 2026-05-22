@@ -9,7 +9,7 @@ namespace FinanceTracker.Api.Repositories
     {
         public async Task<Budget?> GetByCategoryAsync(Guid id)
         {
-            return await context.Budgets.FirstOrDefaultAsync(b => b.CategoryId == id);
+            return await _context.Budgets.FirstOrDefaultAsync(b => b.CategoryId == id);
         }
     }
 }

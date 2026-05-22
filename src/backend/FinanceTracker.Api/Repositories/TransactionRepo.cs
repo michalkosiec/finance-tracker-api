@@ -10,7 +10,7 @@ namespace FinanceTracker.Api.Repositories
     {
         public async Task<IEnumerable<Transaction>> GetAllByUserIdAsync(Guid userId, TransactionParameters parameters)
         {
-            var query = context.Transactions.Include(t => t.Category).AsNoTracking().Where(c => c.UserId == userId);
+            var query = _context.Transactions.Include(t => t.Category).AsNoTracking().Where(c => c.UserId == userId);
 
             if (parameters.Month is not null)
             {
@@ -33,7 +33,7 @@ namespace FinanceTracker.Api.Repositories
 
         public async Task<decimal> GetTotalSpendingAsync(Guid userId, Guid categoryId, DateTime month, Guid? excludeTransactionId = null)
         {
-           var query = context.Transactions.Where(t => t.UserId == userId &&
+           var query = _context.Transactions.Where(t => t.UserId == userId &&
             t.CategoryId == categoryId &&
             t.Date.Year == month.Year &&
             t.Date.Month == month.Month);
@@ -51,7 +51,7 @@ namespace FinanceTracker.Api.Repositories
 
         public async Task<decimal> GetMonthlyTotalAsync(Guid userId, TransactionType type, DateTime date)
         {
-            var monthlyQuery = context.Transactions.AsNoTracking().Where(t => t.UserId == userId && t.Date.Month == date.Month && t.Date.Year == date.Year);
+            var monthlyQuery = _context.Transactions.AsNoTracking().Where(t => t.UserId == userId && t.Date.Month == date.Month && t.Date.Year == date.Year);
             return await monthlyQuery.Where(t => t.Type == type).SumAsync(t => t.Amount);
         }
 
@@ -59,7 +59,7 @@ namespace FinanceTracker.Api.Repositories
         {
             CategoryStats categoryStats = new CategoryStats();
 
-            var statsList = await context.Transactions.AsNoTracking().Where(t => t.UserId == userId &&
+            var statsList = await _context.Transactions.AsNoTracking().Where(t => t.UserId == userId &&
                 t.Date.Month == date.Month &&
                 t.Date.Year == date.Year &&
                 t.Type == TransactionType.Expense)
@@ -79,7 +79,7 @@ namespace FinanceTracker.Api.Repositories
         {
             MonthlyStats monthlyStats = new();
 
-            var rawData = await context.Transactions.AsNoTracking().Where(t => t.UserId == userId && t.Date.Year == date.Year)
+            var rawData = await _context.Transactions.AsNoTracking().Where(t => t.UserId == userId && t.Date.Year == date.Year)
                 .GroupBy(t => t.Date.Month)
                 .Select(g => new { 
                     MonthKey = g.Key, 
