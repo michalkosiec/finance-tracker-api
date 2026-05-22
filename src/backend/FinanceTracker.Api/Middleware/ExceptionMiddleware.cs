@@ -24,7 +24,7 @@ namespace FinanceTracker.Api.Middleware
             {
                 KeyNotFoundException => (int)HttpStatusCode.NotFound,
                 BadHttpRequestException => (int)HttpStatusCode.BadRequest,
-                UnauthorizedAccessException => (int)HttpStatusCode.Unauthorized,
+                UnauthorizedAccessException => (int)HttpStatusCode.Forbidden,
                 _ => (int)HttpStatusCode.InternalServerError
             };
 
