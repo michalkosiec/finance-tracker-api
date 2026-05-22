@@ -25,4 +25,3 @@ jobs:
 
       - name: Test
         run: dotnet test src/backend/FinanceTracker.Tests/FinanceTracker.Tests.csproj --verbosity normal
-s
