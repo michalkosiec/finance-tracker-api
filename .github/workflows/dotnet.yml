@@ -18,10 +18,10 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore dependencies
-        run: dotnet restore src/backend/FinanceTracker.sln
+        run: dotnet restore src/FinanceTracker.sln
 
       - name: Build
-        run: dotnet build src/backend/FinanceTracker.sln --no-restore --configuration Release
+        run: dotnet build src/FinanceTracker.sln --no-restore --configuration Release
 
       - name: Test
-        run: dotnet test src/backend/FinanceTracker.Tests/FinanceTracker.Tests.csproj --verbosity normal
+        run: dotnet test src/FinanceTracker.Tests/FinanceTracker.Tests.csproj --verbosity normal
