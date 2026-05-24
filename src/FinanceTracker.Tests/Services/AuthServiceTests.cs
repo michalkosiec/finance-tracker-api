@@ -44,9 +44,19 @@ namespace FinanceTracker.Tests.Services
                 Password = "Password123!"
             };
 
+            var mappedUser = new User 
+            { 
+                Name = userCreate.Name, 
+                Email = userCreate.Email 
+            };
+
             _userRepoMock
                 .Setup(repo => repo.AnyAsync(It.IsAny<Expression<Func<User, bool>>>()))
                 .ReturnsAsync(true);
+
+            _mapperMock
+                .Setup(mapper => mapper.Map<User>(It.IsAny<UserCreateDto>()))
+                .Returns(mappedUser);
 
             var result = await _authService.RegisterAsync(userCreate);
 
@@ -63,9 +73,19 @@ namespace FinanceTracker.Tests.Services
                 Password = "Password123!"
             };
 
+            var mappedUser = new User 
+            { 
+                Name = userCreate.Name, 
+                Email = userCreate.Email 
+            };
+
             _userRepoMock
                 .Setup(repo => repo.AnyAsync(It.IsAny<Expression<Func<User, bool>>>()))
                 .ReturnsAsync(false);
+
+            _mapperMock
+                .Setup(mapper => mapper.Map<User>(It.IsAny<UserCreateDto>()))
+                .Returns(mappedUser);
 
             var result = await _authService.RegisterAsync(userCreate);
 
@@ -88,6 +108,56 @@ namespace FinanceTracker.Tests.Services
             var result = await _authService.LoginAsync(userLogin);
 
             Assert.Null(result);
+        }
+
+        [Fact]
+        public async Task LoginAsync_ShouldReturnNull_WhenPasswordIsIncorrect()
+        {
+            var userLogin = new UserLoginDto
+            {
+                Email = "test@example.com",
+                Password = "Password123!"
+            };
+
+            var user = new User
+            {
+                Email = userLogin.Email,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("WrongPassword!"),
+            };
+
+            _userRepoMock
+                .Setup(repo => repo.GetFirstOrDefaultByAsync(It.IsAny<Expression<Func<User, bool>>>()))
+                .ReturnsAsync(user);
+
+            var result = await _authService.LoginAsync(userLogin);
+
+            Assert.Null(result);
+        }
+
+        [Fact]
+        public async Task LoginAsync_ShouldReturnToken_WhenPasswordIsCorrect()
+        {
+            var userLogin = new UserLoginDto
+            {
+                Email = "test@example.com",
+                Password = "Password123!"
+            };
+
+            var user = new User
+            {
+                Email = userLogin.Email,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(userLogin.Password),
+            };
+
+            _userRepoMock
+                .Setup(repo => repo.GetFirstOrDefaultByAsync(It.IsAny<Expression<Func<User, bool>>>()))
+                .ReturnsAsync(user);
+
+            var token = await _authService.LoginAsync(userLogin);
+            
+            Assert.NotNull(token);
+            Assert.IsType<string>(token);
+            Assert.NotEmpty(token);
         }
     }
 }
