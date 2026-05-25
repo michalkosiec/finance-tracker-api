@@ -19,7 +19,7 @@ services:
 
   api:
     build:
-      context: ./src/backend/Api
+      context: ./src/FinanceTracker.Api
       dockerfile: Dockerfile
     environment:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
@@ -34,7 +34,7 @@ services:
   migration_tool:
     image: mcr.microsoft.com/dotnet/sdk:10.0
     volumes:
-      - ./src/backend/Api:/Api
+      - ./src/FinanceTracker.Api:/Api
       - /Api/obj
       - /Api/bin
     working_dir: /Api
