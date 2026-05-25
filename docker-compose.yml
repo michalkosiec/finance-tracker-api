@@ -14,8 +14,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 10
+      start_period: 15s
 
   api:
     build:
@@ -46,10 +46,16 @@ services:
       db:
         condition: service_healthy
     entrypoint: >
-      sh -c "dotnet tool install --global dotnet-ef &&
+      sh -c "dotnet tool install --global dotnet-ef || true &&
              export PATH=\"$$PATH:/root/.dotnet/tools\" &&
              dotnet restore &&
-             dotnet ef database update"
+             count=0 &&
+             until dotnet ef database update || [ $count -eq 60 ]; do
+               echo 'Database is not ready, try: $count, retrying in 5s...'
+               sleep 5
+               count=$((count+1))
+             done && 
+             if [ $count -eq 60 ]; then echo 'Database did not start in time!'; exit 1; fi"
 
 volumes:
   db_data:
