@@ -2,9 +2,9 @@
 
 # Finance Tracker API
 
-A professional, containerized REST API for personal finance management.
+A containerized REST API for personal finance management.
 
-Finance Tracker API provides a robust backend system designed to track incomes and expenses, organize transactions into custom categories, and manage strict monthly budgets. The architecture enforces multi-tenancy at the database level, ensuring full data isolation between users. It features an automated validation engine that guarantees data integrity and applies complex financial rules—such as blocking expenses that exceed predefined category limits.
+Finance Tracker API provides a backend system designed to track incomes and expenses, organize transactions into custom categories, and manage strict monthly budgets. The architecture enforces multi-tenancy at the database level, ensuring full data isolation between users. It features an automated validation engine that guarantees data integrity and applies financial rules—such as blocking expenses that exceed predefined category limits.
 
 ## Tech Stack Overview
 
@@ -17,8 +17,6 @@ Finance Tracker API provides a robust backend system designed to track incomes a
 
 ## Getting Started
 
-You do **not** need the .NET SDK or a local instance of PostgreSQL installed on your machine. The entire infrastructure is fully containerized and ready to run.
-
 ### 1. Configure the environment
 
 Create your local configuration file by copying the provided template:
@@ -29,9 +27,9 @@ cp .env.example .env
 
 _(Optional: Open the `.env` file to customize your database credentials or ports)._
 
-### 2. Spin up the infrastructure
+### 2. Create the infrastructure
 
-Build the containers, execute automatic Entity Framework database migrations, and launch the API server with a single command:
+Launch the API server with a command:
 
 ```bash
 docker-compose up --build
@@ -39,8 +37,8 @@ docker-compose up --build
 
 ### 3. Explore and test the API
 
-Once the Docker containers are successfully up and running, you can easily interact with the API endpoints directly from your browser using the built-in Scalar interface:
+Once started you can interact with the api via given access points:
 
 - **Interactive API Reference:** [http://localhost:5200/scalar](http://localhost:5200/scalar)
 - **Direct API Access:** `http://localhost:5200`
-- **Local Database Access:** `localhost:5935` (Connect using tools like DBeaver or pgAdmin)
+- **Local Database Access:** `localhost:5935`
