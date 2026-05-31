@@ -4,8 +4,8 @@ namespace FinanceTracker.Api.Services.Interfaces
 {
     public interface IStatsService
     {
-        Task<StatsSummaryReadDto> GetSummaryAsync(DateTime date, Guid userId);
-        Task<CategoryStatsReadDto> GetExpensesByCategoryAsync(DateTime date, Guid userId);
-        Task<MonthlyStatsReadDto> GetMonthlyStatsAsync(DateTime date, Guid userId);
+        Task<StatsSummaryReadDto> GetSummaryAsync(MonthQueryDto query, Guid userId);
+        Task<CategoryStatsReadDto> GetExpensesByCategoryAsync(MonthQueryDto query, Guid userId);
+        Task<MonthlyStatsReadDto> GetMonthlyStatsAsync(YearQueryDto query, Guid userId);
     }
 }

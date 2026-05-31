@@ -1,23 +1,20 @@
-using FinanceTracker.Api.Models;
-using FinanceTracker.Api.Repositories;
 using FinanceTracker.Api.Dtos.Users;
 using Microsoft.AspNetCore.Mvc;
 using RouteAttribute = Microsoft.AspNetCore.Mvc.RouteAttribute;
-using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
+using FinanceTracker.Api.Services;
 
 namespace FinanceTracker.Api.Controllers
 {
     [Authorize(Roles = "Admin")]
     [ApiController]
     [Route("[controller]")]
-    public class UsersController(IUserRepo repo, IMapper mapper) : AppControllerBase
+    public class UsersController(IUserService userService) : AppControllerBase
     {
         [HttpGet]
         public async Task<IActionResult> GetUsers()
         {
-            var users = await repo.GetAllAsync();
-            var usersRead = mapper.Map<IEnumerable<UserReadDto>>(users);
+            var usersRead = await userService.GetAllUsersAsync();
 
             return Ok(usersRead);
         }
@@ -25,59 +22,33 @@ namespace FinanceTracker.Api.Controllers
         [HttpGet("{id}", Name = "GetUserById")]
         public async Task<IActionResult> GetUserById(Guid id)
         {
-            var user = await repo.GetByIdAsync(id);
-            if (user == null)
-            {
-                return NotFound();
-            } else
-            {
-                var userRead = mapper.Map<UserReadDto>(user);
+            var userRead = await userService.GetUserByIdAsync(id);
 
-                return Ok(userRead);
-            }
+            return userRead == null ? NotFound() : Ok(userRead);
         }
 
         [HttpPost]
         public async Task<IActionResult> CreateUser([FromBody] UserCreateDto userCreate)
         {
-            var user = mapper.Map<User>(userCreate);
-            await repo.CreateAsync(user);
-            var userRead = mapper.Map<UserReadDto>(user);
+            var userRead = await userService.CreateUserAsync(userCreate);
 
-            return CreatedAtAction(nameof(GetUsers), new { id = user }, userRead);
+            return CreatedAtAction(nameof(GetUsers), new { id = userRead.Id }, userRead);
         }
 
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateUser(Guid id, [FromBody] UserUpdateDto userUpdate)
         {
-            var user = await repo.GetByIdAsync(id);
-            if (user == null)
-            {
-                return NotFound();
-            } else
-            {
-                mapper.Map(userUpdate, user);
-                user.UpdatedAt = DateTimeOffset.UtcNow;
+            var result = await userService.UpdateUserAsync(id, userUpdate);
 
-                await repo.UpdateAsync(user);
-
-                return NoContent();
-            }
+            return result ? NoContent() : NotFound();
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteUser(Guid id)
         {
-            var user = await repo.GetByIdAsync(id);
-            if (user == null)
-            {
-                return NotFound();
-            } else
-            {
-                await repo.DeleteAsync(id);
-                
-                return NoContent();
-            }
+            var result = await userService.DeleteUserAsync(id);
+
+            return result ? NoContent() : NotFound();
         }
     }
 }

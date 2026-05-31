@@ -3,13 +3,16 @@ using FinanceTracker.Api.Models;
 using AutoMapper;
 using FinanceTracker.Api.Services.Interfaces;
 using FinanceTracker.Api.Repositories.Interfaces;
+using System.Globalization;
 
 namespace FinanceTracker.Api.Services
 {
     public class StatsService(ITransactionRepo repo, IMapper mapper) : IStatsService
     {
-         public async Task<StatsSummaryReadDto> GetSummaryAsync(DateTime date, Guid userId)
+         public async Task<StatsSummaryReadDto> GetSummaryAsync(MonthQueryDto query, Guid userId)
         {
+            DateTime date = DateTime.ParseExact(query.Month, "yyyy-MM", CultureInfo.InvariantCulture);
+            
             var totalIncome = await repo.GetMonthlyTotalAsync(userId, TransactionType.Income, date);
             var totalExpense = await repo.GetMonthlyTotalAsync(userId, TransactionType.Expense, date);
 
@@ -21,16 +24,20 @@ namespace FinanceTracker.Api.Services
                 Balance = totalIncome - totalExpense
             };
         }
-        public async Task<CategoryStatsReadDto> GetExpensesByCategoryAsync(DateTime date, Guid userId)
+        public async Task<CategoryStatsReadDto> GetExpensesByCategoryAsync(MonthQueryDto query, Guid userId)
         {
+            DateTime date = DateTime.ParseExact(query.Month, "yyyy-MM", CultureInfo.InvariantCulture);
+            
             var categoryStats = await repo.GetCategoryStatsAsync(userId, date);
             var categoryStatsRead = mapper.Map<CategoryStatsReadDto>(categoryStats);
 
             return categoryStatsRead;
         }
 
-        public async Task<MonthlyStatsReadDto> GetMonthlyStatsAsync(DateTime date, Guid userId)
+        public async Task<MonthlyStatsReadDto> GetMonthlyStatsAsync(YearQueryDto query, Guid userId)
         {
+            DateTime date = DateTime.ParseExact(query.Year, "yyyy", CultureInfo.InvariantCulture);
+            
             var montlyStats = await repo.GetMonthlyStatsAsync(userId, date);
 
             MonthlyStats fullMonthlyStats = new();

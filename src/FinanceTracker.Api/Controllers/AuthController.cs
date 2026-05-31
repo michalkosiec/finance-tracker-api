@@ -1,8 +1,6 @@
 using FinanceTracker.Api.Dtos.Users;
 using FinanceTracker.Api.Services;
-using FinanceTracker.Api.Repositories;
 using Microsoft.AspNetCore.Mvc;
-using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using FinanceTracker.Api.Services.Interfaces;
 
@@ -10,7 +8,7 @@ namespace FinanceTracker.Api.Controllers
 {
     [ApiController]
     [Route("[controller]")]
-    public class AuthController(IAuthService authService, IUserRepo repo, IMapper mapper) : AppControllerBase
+    public class AuthController(IAuthService authService, IUserService userService) : AppControllerBase
     {
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] UserLoginDto userLogin)
@@ -43,8 +41,7 @@ namespace FinanceTracker.Api.Controllers
             var userId = UserId;
             if (userId is null) return Unauthorized();
 
-            var user = await repo.GetByIdAsync(userId.Value);
-            var userRead = mapper.Map<UserReadDto>(user);
+            var userRead = await userService.GetUserByIdAsync(userId.Value);
 
             return Ok(userRead);
         }

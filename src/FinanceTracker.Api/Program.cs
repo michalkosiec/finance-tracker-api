@@ -42,6 +42,10 @@ builder.Services.AddScoped<IBudgetRepo, BudgetRepo>();
 builder.Services.AddScoped<ICategoryRepo, CategoryRepo>();  
 builder.Services.AddScoped<ITransactionRepo, TransactionRepo>();
 builder.Services.AddScoped<IValidationService, ValidationService>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<ITransactionService, TransactionService>();
+builder.Services.AddScoped<ICategoryService, CategoryService>();
+builder.Services.AddScoped<IBudgetService, BudgetService>();
 
 
 builder.Services.AddControllers().AddJsonOptions(options =>
