@@ -6,20 +6,18 @@ namespace FinanceTracker.Domain.Entities
 {
     public class Budget : IUserOwned, IEntity
     {
-        public Guid Id {get; init;}
-        public Guid UserId {get; init;}
+        public Guid Id { get; init; }
+        public Guid UserId { get; init; }
         public Guid CategoryId { get; private set; }
         public Money LimitAmount { get; private set; }
         public DateTime Month { get; init; }
         public DateTimeOffset CreatedAt { get; init; }
         public DateTimeOffset UpdatedAt { get; private set; }
 
-        private Budget() {}
+        private Budget() { }
 
-        public Budget(Guid id, Guid userId, Guid categoryId, Money limitAmount, DateTime month)
+        private Budget(Guid id, Guid userId, Guid categoryId, Money limitAmount, DateTime month)
         {
-            if (id == Guid.Empty)
-                throw new DomainException("Id cannot be empty.", nameof(id));
             if (userId == Guid.Empty)
                 throw new DomainException("UserId cannot be empty.", nameof(userId));
             if (categoryId == Guid.Empty)
@@ -36,6 +34,11 @@ namespace FinanceTracker.Domain.Entities
 
             CreatedAt = DateTimeOffset.UtcNow;
             UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        public static Budget Create(Guid userId, Guid categoryId, Money limitAmount, DateTime month)
+        {
+            return new Budget(Guid.NewGuid(), userId, categoryId, limitAmount, month);
         }
 
         public void UpdateLimitAmount(Money newLimitAmount)
@@ -67,6 +70,7 @@ namespace FinanceTracker.Domain.Entities
                 throw new DomainException("Transaction amount cannot be negative.", nameof(newTransactionAmount));
 
             var projectedTotal = currentTotalExpenses.Add(newTransactionAmount);
+
             if (projectedTotal.Amount > LimitAmount.Amount)
                 throw new BudgetExceededException($"Adding this transaction would exceed the budget limit of {LimitAmount.Amount} {LimitAmount.Currency}.");
         }

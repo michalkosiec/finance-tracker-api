@@ -5,26 +5,24 @@ namespace FinanceTracker.Domain.Entities
 {
     public class Category : IUserOwned, IEntity
     {
-        public Guid Id {get; init;}
+        public Guid Id { get; init; }
 
         public Guid UserId { get; init; }
 
-        public string Name {get; private set;}
+        public string Name { get; private set; }
 
-        public string Icon {get; private set;}
+        public string Icon { get; private set; }
 
-        public string Color {get; private set;}
+        public string Color { get; private set; }
 
-        public DateTimeOffset CreatedAt {get; init;}
+        public DateTimeOffset CreatedAt { get; init; }
 
-        public DateTimeOffset UpdatedAt {get; private set;}
+        public DateTimeOffset UpdatedAt { get; private set; }
 
-        private Category() {}
+        private Category() { }
 
-        public Category(Guid id, Guid userId, string name, string icon, string color)
+        private Category(Guid id, Guid userId, string name, string icon, string color)
         {
-            if (id == Guid.Empty)
-                throw new DomainException("Id cannot be empty.", nameof(id));
             if (userId == Guid.Empty)
                 throw new DomainException("UserId cannot be empty.", nameof(userId));
             if (string.IsNullOrWhiteSpace(name))
@@ -37,6 +35,11 @@ namespace FinanceTracker.Domain.Entities
             Color = color;
             CreatedAt = DateTimeOffset.UtcNow;
             UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        public static Category Create(Guid userId, string name, string icon, string color)
+        {
+            return new Category(Guid.NewGuid(), userId, name, icon, color);
         }
 
         public void UpdateName(string newName)

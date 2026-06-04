@@ -9,7 +9,7 @@ namespace FinanceTracker.Application.Common.Behaviors
         public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
         {
             if (!validators.Any())
-                return await next();
+                return await next(cancellationToken);
 
             var context = new ValidationContext<TRequest>(request);
 
@@ -25,7 +25,7 @@ namespace FinanceTracker.Application.Common.Behaviors
             if (failures.Count != 0)
                 throw new ValidationException(failures);
 
-            return await next();
+            return await next(cancellationToken);
         }
     }
 }

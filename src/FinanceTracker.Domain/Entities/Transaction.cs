@@ -12,22 +12,20 @@ namespace FinanceTracker.Domain.Entities
 
     public class Transaction : IUserOwned, IEntity
     {
-        public Guid Id {get; init;}
-        public Guid UserId {get; init;}
-        public string Name {get; private set;}
-        public Money Amount {get; private set;}
-        public Guid CategoryId {get; private set;}
-        public DateTime Date {get; private set;}
-        public TransactionType Type {get; private set;}
-        public DateTimeOffset CreatedAt {get; init;}
-        public DateTimeOffset UpdatedAt {get; private set;}
+        public Guid Id { get; init; }
+        public Guid UserId { get; init; }
+        public string Name { get; private set; }
+        public Money Amount { get; private set; }
+        public Guid CategoryId { get; private set; }
+        public DateTime Date { get; private set; }
+        public TransactionType Type { get; private set; }
+        public DateTimeOffset CreatedAt { get; init; }
+        public DateTimeOffset UpdatedAt { get; private set; }
 
-        private Transaction() {}
+        private Transaction() { }
 
-        public Transaction(Guid id, Guid userId, string name, Money amount, Guid categoryId, DateTime date, TransactionType type)
+        private Transaction(Guid id, Guid userId, string name, Money amount, Guid categoryId, DateTime date, TransactionType type)
         {
-            if (id == Guid.Empty)
-                throw new DomainException("Id cannot be empty.", nameof(id));
             if (userId == Guid.Empty)
                 throw new DomainException("UserId cannot be empty.", nameof(userId));
             if (string.IsNullOrWhiteSpace(name))
@@ -44,6 +42,11 @@ namespace FinanceTracker.Domain.Entities
             Type = type;
             CreatedAt = DateTimeOffset.UtcNow;
             UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        public static Transaction Create(Guid userId, string name, Money amount, Guid categoryId, DateTime date, TransactionType type)
+        {
+            return new Transaction(Guid.NewGuid(), userId, name, amount, categoryId, date, type);
         }
 
         public void UpdateAmount(Money newAmount)

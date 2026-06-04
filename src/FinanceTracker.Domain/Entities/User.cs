@@ -12,10 +12,8 @@ namespace FinanceTracker.Domain.Entities
 
         private User() { }
 
-        public User(Guid id, string name, string email)
+        private User(Guid id, string name, string email)
         {
-            if (id == Guid.Empty)
-                throw new DomainException("Id cannot be empty.", nameof(id));
             if (string.IsNullOrWhiteSpace(name))
                 throw new DomainException("Name cannot be null or whitespace.", nameof(name));
             if (string.IsNullOrWhiteSpace(email))
@@ -26,6 +24,11 @@ namespace FinanceTracker.Domain.Entities
             Email = email;
             CreatedAt = DateTimeOffset.UtcNow;
             UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        public static User Create(string name, string email)
+        {
+            return new User(Guid.NewGuid(), name, email);
         }
 
         public void UpdateName(string newName)
