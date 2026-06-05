@@ -1,5 +1,6 @@
 using FinanceTracker.Domain.Common;
 using FinanceTracker.Domain.Exceptions;
+
 namespace FinanceTracker.Domain.Entities
 {
     public class User : IEntity

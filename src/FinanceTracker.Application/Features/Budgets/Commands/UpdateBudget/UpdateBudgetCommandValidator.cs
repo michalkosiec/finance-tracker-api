@@ -1,10 +1,10 @@
 using FluentValidation;
 
-namespace FinanceTracker.Application.Features.Budgets.Commands.CreateBudget
+namespace FinanceTracker.Application.Features.Budgets.Commands.UpdateBudget
 {
-    public class CreateBudgetCommandValidator : AbstractValidator<CreateBudgetCommand>
+    public class UpdateBudgetCommandValidator : AbstractValidator<UpdateBudgetCommand>
     {
-        public CreateBudgetCommandValidator()
+        public UpdateBudgetCommandValidator()
         {
             RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
 

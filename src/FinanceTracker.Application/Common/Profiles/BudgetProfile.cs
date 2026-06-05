@@ -9,7 +9,6 @@ namespace FinanceTracker.Application.Common.Profiles
     {
         public BudgetProfile()
         {
-            // CreateMap<CreateBudgetCommand, Budget>();
             CreateMap<Budget, BudgetResponse>();
         }
     }

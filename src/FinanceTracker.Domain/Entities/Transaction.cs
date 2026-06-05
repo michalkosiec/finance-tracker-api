@@ -7,7 +7,7 @@ namespace FinanceTracker.Domain.Entities
     public enum TransactionType
     {
         Income,
-        Expense
+        Expense,
     }
 
     public class Transaction : IUserOwned, IEntity
@@ -24,7 +24,15 @@ namespace FinanceTracker.Domain.Entities
 
         private Transaction() { }
 
-        private Transaction(Guid id, Guid userId, string name, Money amount, Guid categoryId, DateTime date, TransactionType type)
+        private Transaction(
+            Guid id,
+            Guid userId,
+            string name,
+            Money amount,
+            Guid categoryId,
+            DateTime date,
+            TransactionType type
+        )
         {
             if (userId == Guid.Empty)
                 throw new DomainException("UserId cannot be empty.", nameof(userId));
@@ -44,14 +52,22 @@ namespace FinanceTracker.Domain.Entities
             UpdatedAt = DateTimeOffset.UtcNow;
         }
 
-        public static Transaction Create(Guid userId, string name, Money amount, Guid categoryId, DateTime date, TransactionType type)
+        public static Transaction Create(
+            Guid userId,
+            string name,
+            Money amount,
+            Guid categoryId,
+            DateTime date,
+            TransactionType type
+        )
         {
             return new Transaction(Guid.NewGuid(), userId, name, amount, categoryId, date, type);
         }
 
         public void UpdateAmount(Money newAmount)
         {
-            Amount = newAmount ?? throw new DomainException("Amount cannot be null.", nameof(newAmount));
+            Amount =
+                newAmount ?? throw new DomainException("Amount cannot be null.", nameof(newAmount));
             UpdateTimestamp();
         }
 

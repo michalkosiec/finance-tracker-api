@@ -44,7 +44,10 @@ namespace FinanceTracker.Domain.Entities
         public void UpdateLimitAmount(Money newLimitAmount)
         {
             if (newLimitAmount.Amount < 0)
-                throw new DomainException("LimitAmount cannot be negative.", nameof(newLimitAmount));
+                throw new DomainException(
+                    "LimitAmount cannot be negative.",
+                    nameof(newLimitAmount)
+                );
 
             LimitAmount = newLimitAmount;
             UpdateTimestamp();
@@ -67,12 +70,17 @@ namespace FinanceTracker.Domain.Entities
         public void VerifySufficientFunds(Money newTransactionAmount, Money currentTotalExpenses)
         {
             if (newTransactionAmount.Amount < 0)
-                throw new DomainException("Transaction amount cannot be negative.", nameof(newTransactionAmount));
+                throw new DomainException(
+                    "Transaction amount cannot be negative.",
+                    nameof(newTransactionAmount)
+                );
 
             var projectedTotal = currentTotalExpenses.Add(newTransactionAmount);
 
             if (projectedTotal.Amount > LimitAmount.Amount)
-                throw new BudgetExceededException($"Adding this transaction would exceed the budget limit of {LimitAmount.Amount} {LimitAmount.Currency}.");
+                throw new BudgetExceededException(
+                    $"Adding this transaction would exceed the budget limit of {LimitAmount.Amount} {LimitAmount.Currency}."
+                );
         }
     }
 }

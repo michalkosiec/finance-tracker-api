@@ -17,6 +17,7 @@ namespace FinanceTracker.Domain.ValueObjects
             Amount = amount;
             Currency = currency.ToUpper();
         }
+
         public Money Add(Money other)
         {
             if (Currency != other.Currency)
@@ -28,7 +29,9 @@ namespace FinanceTracker.Domain.ValueObjects
         public Money Subtract(Money other)
         {
             if (Currency != other.Currency)
-                throw new InvalidOperationException("Cannot subtract money with different currencies.");
+                throw new InvalidOperationException(
+                    "Cannot subtract money with different currencies."
+                );
 
             return new Money(Amount - other.Amount, Currency);
         }
