@@ -14,11 +14,10 @@ namespace FinanceTracker.Application.Features.Budgets.Commands.UpdateBudget
         {
             var budget =
                 context.Budgets.FirstOrDefault(b =>
-                    b.UserId == request.UserId
-                    && b.Month == new DateTime(request.Month.Year, request.Month.Month, 1)
+                    b.UserId == request.UserId && b.Id == request.Id
                 )
                 ?? throw new KeyNotFoundException(
-                    "Budget not found for the specified user and month."
+                    "Budget not found for the specified user and budget ID."
                 );
 
             budget.UpdateLimitAmount(new Money(request.LimitAmount, request.Currency));

@@ -67,7 +67,7 @@ namespace FinanceTracker.Domain.Entities
             UpdatedAt = DateTimeOffset.UtcNow;
         }
 
-        public void VerifySufficientFunds(Money newTransactionAmount, Money currentTotalExpenses)
+        public void VerifySufficientFunds(Money newTransactionAmount, Money currentBallance)
         {
             if (newTransactionAmount.Amount < 0)
                 throw new DomainException(
@@ -75,7 +75,7 @@ namespace FinanceTracker.Domain.Entities
                     nameof(newTransactionAmount)
                 );
 
-            var projectedTotal = currentTotalExpenses.Add(newTransactionAmount);
+            var projectedTotal = currentBallance.Add(newTransactionAmount);
 
             if (projectedTotal.Amount > LimitAmount.Amount)
                 throw new BudgetExceededException(

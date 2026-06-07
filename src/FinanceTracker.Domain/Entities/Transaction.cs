@@ -18,6 +18,7 @@ namespace FinanceTracker.Domain.Entities
         public Money Amount { get; private set; }
         public Guid CategoryId { get; private set; }
         public DateTime Date { get; private set; }
+        public DateTime Month { get; private set; }
         public TransactionType Type { get; private set; }
         public DateTimeOffset CreatedAt { get; init; }
         public DateTimeOffset UpdatedAt { get; private set; }

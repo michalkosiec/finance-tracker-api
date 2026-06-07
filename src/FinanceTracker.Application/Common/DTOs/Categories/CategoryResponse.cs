@@ -1,13 +1,12 @@
 namespace FinanceTracker.Application.Common.DTOs.Categories
 {
     public record CategoryResponse(
-        Guid id,
-        Guid userId,
-        string name,
-        string icon,
-        string color,
-        DateTime createdAt,
-        DateTime updatedAt
-        )
-    { }
+        Guid Id,
+        Guid UserId,
+        string Name,
+        string Icon,
+        string Color,
+        DateTime CreatedAt,
+        DateTime UpdatedAt
+    ) { }
 }
