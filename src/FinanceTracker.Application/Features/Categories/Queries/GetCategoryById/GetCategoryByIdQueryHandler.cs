@@ -1,4 +1,5 @@
 using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using FinanceTracker.Application.Common.DTOs.Categories;
 using FinanceTracker.Application.Common.Interfaces;
 using MediatR;
@@ -14,18 +15,14 @@ namespace FinanceTracker.Application.Features.Categories.Queries.GetCategoryById
             CancellationToken cancellationToken
         )
         {
-            var category =
+             var categoryResponse =
                 await context
-                    .Categories.AsNoTracking()
-                    .FirstOrDefaultAsync(
-                        c => c.Id == request.CategoryId && c.UserId == request.UserId,
-                        cancellationToken
-                    )
-                ?? throw new KeyNotFoundException(
-                    "Category not found for the specified category ID."
-                );
+                    .Categories.Where(c => c.Id == request.CategoryId && c.UserId == request.UserId,)
+                    .ProjectTo<CategoryResponse>(mapper.ConfigurationProvider)
+                    .FirstOrDefaultAsync(cancellationToken)
+                ?? throw new KeyNotFoundException("User not found for the given category and user ID.");
 
-            return mapper.Map<CategoryResponse>(category);
+            return categoryResponse;
         }
     }
 }

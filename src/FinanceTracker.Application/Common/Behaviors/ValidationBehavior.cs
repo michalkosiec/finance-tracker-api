@@ -3,10 +3,16 @@ using MediatR;
 
 namespace FinanceTracker.Application.Common.Behaviors
 {
-    public class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidator<TRequest>> validators) : IPipelineBehavior<TRequest, TResponse>
+    public class ValidationBehavior<TRequest, TResponse>(
+        IEnumerable<IValidator<TRequest>> validators
+    ) : IPipelineBehavior<TRequest, TResponse>
         where TRequest : notnull, IRequest<TResponse>
     {
-        public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
+        public async Task<TResponse> Handle(
+            TRequest request,
+            RequestHandlerDelegate<TResponse> next,
+            CancellationToken cancellationToken
+        )
         {
             if (!validators.Any())
                 return await next(cancellationToken);

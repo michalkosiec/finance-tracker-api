@@ -1,4 +1,5 @@
 using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using FinanceTracker.Application.Common.DTOs.Budgets;
 using FinanceTracker.Application.Common.Interfaces;
 using MediatR;
@@ -14,15 +15,16 @@ namespace FinanceTracker.Application.Features.Budgets.Queries.GetBudgetById
             CancellationToken cancellationToken
         )
         {
-            var budget =
-                context
-                    .Budgets.AsNoTracking()
-                    .FirstOrDefault(b => b.Id == request.BudgetId && b.UserId == request.UserId)
+            var budgetResponse =
+                await context
+                    .Budgets.Where(b => b.Id == request.BudgetId && b.UserId == request.UserId)
+                    .ProjectTo<BudgetResponse>(mapper.ConfigurationProvider)
+                    .FirstOrDefaultAsync(cancellationToken)
                 ?? throw new KeyNotFoundException(
-                    "Budget not found for the specified user and budget ID."
+                    "Budget not found for the given budget and user ID."
                 );
 
-            return mapper.Map<BudgetResponse>(budget);
+            return budgetResponse;
         }
     }
 }

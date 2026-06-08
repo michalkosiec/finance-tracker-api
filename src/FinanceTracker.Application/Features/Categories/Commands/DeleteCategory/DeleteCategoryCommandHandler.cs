@@ -12,6 +12,15 @@ namespace FinanceTracker.Application.Features.Categories.Commands.DeleteCategory
             CancellationToken cancellationToken
         )
         {
+            var category =
+                await context.Categories.FirstOrDefaultAsync(
+                    c => c.Id == request.CategoryId && c.UserId == request.UserId,
+                    cancellationToken
+                )
+                ?? throw new KeyNotFoundException(
+                    "Category not found for the specified category ID."
+                );
+
             var isReferenced =
                 await context.Budgets.AnyAsync(
                     b => b.CategoryId == request.CategoryId,
@@ -25,15 +34,6 @@ namespace FinanceTracker.Application.Features.Categories.Commands.DeleteCategory
             if (isReferenced)
                 throw new InvalidOperationException(
                     "Cannot delete this category because it is associated with existing budget or transaction"
-                );
-
-            var category =
-                await context.Categories.FirstOrDefaultAsync(
-                    c => c.Id == request.CategoryId && c.UserId == request.UserId,
-                    cancellationToken
-                )
-                ?? throw new KeyNotFoundException(
-                    "Category not found for the specified category ID."
                 );
 
             context.Categories.Remove(category);

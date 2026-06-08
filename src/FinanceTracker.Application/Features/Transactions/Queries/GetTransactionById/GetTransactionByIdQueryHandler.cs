@@ -1,4 +1,5 @@
 using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using FinanceTracker.Application.Common.DTOs.Transactions;
 using FinanceTracker.Application.Common.Interfaces;
 using MediatR;
@@ -14,12 +15,18 @@ namespace FinanceTracker.Application.Features.Transactions.Queries.GetTransactio
             CancellationToken cancellationToken
         )
         {
-            var transaction = await context.Transactions.FirstOrDefaultAsync(
-                t => t.UserId == request.UserId && t.Id == request.TransactionId,
-                cancellationToken
-            );
+            var transactionResponse =
+                await context
+                    .Transactions.Where(t =>
+                        t.UserId == request.UserId && t.Id == request.TransactionId
+                    )
+                    .ProjectTo<TransactionResponse>(mapper.ConfigurationProvider)
+                    .FirstOrDefaultAsync(cancellationToken)
+                ?? throw new KeyNotFoundException(
+                    "Transaction not found for the given transaction and user ID."
+                );
 
-            return mapper.Map<TransactionResponse>(transaction);
+            return transactionResponse;
         }
     }
 }

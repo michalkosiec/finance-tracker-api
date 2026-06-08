@@ -1,6 +1,5 @@
 using AutoMapper;
 using FinanceTracker.Application.Common.DTOs.Budgets;
-using FinanceTracker.Application.Features.Budgets.Commands.CreateBudget;
 using FinanceTracker.Domain.Entities;
 
 namespace FinanceTracker.Application.Common.Profiles

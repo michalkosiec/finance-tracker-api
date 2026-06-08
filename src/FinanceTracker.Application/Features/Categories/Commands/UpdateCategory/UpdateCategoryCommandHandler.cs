@@ -1,5 +1,6 @@
 using FinanceTracker.Application.Common.Interfaces;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace FinanceTracker.Application.Features.Categories.Commands.UpdateCategory
 {
