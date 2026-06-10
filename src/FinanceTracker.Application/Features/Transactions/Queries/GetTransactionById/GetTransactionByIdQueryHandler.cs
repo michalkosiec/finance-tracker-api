@@ -1,7 +1,9 @@
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using FinanceTracker.Application.Common.DTOs.Transactions;
+using FinanceTracker.Application.Common.Exceptions;
 using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -22,9 +24,7 @@ namespace FinanceTracker.Application.Features.Transactions.Queries.GetTransactio
                     )
                     .ProjectTo<TransactionResponse>(mapper.ConfigurationProvider)
                     .FirstOrDefaultAsync(cancellationToken)
-                ?? throw new KeyNotFoundException(
-                    "Transaction not found for the given transaction and user ID."
-                );
+                ?? throw new NotFoundException(nameof(Transaction), new { request.TransactionId });
 
             return transactionResponse;
         }

@@ -1,4 +1,6 @@
+using FinanceTracker.Application.Common.Exceptions;
 using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -16,10 +18,7 @@ namespace FinanceTracker.Application.Features.Categories.Commands.DeleteCategory
                 await context.Categories.FirstOrDefaultAsync(
                     c => c.Id == request.CategoryId && c.UserId == request.UserId,
                     cancellationToken
-                )
-                ?? throw new KeyNotFoundException(
-                    "Category not found for the specified category ID."
-                );
+                ) ?? throw new NotFoundException(nameof(Category), new { request.CategoryId });
 
             var isReferenced =
                 await context.Budgets.AnyAsync(
@@ -32,7 +31,7 @@ namespace FinanceTracker.Application.Features.Categories.Commands.DeleteCategory
                 );
 
             if (isReferenced)
-                throw new InvalidOperationException(
+                throw new ConflictException(
                     "Cannot delete this category because it is associated with existing budget or transaction"
                 );
 

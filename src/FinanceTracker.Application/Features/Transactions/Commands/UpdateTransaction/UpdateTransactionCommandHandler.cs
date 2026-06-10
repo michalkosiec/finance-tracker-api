@@ -1,3 +1,4 @@
+using FinanceTracker.Application.Common.Exceptions;
 using FinanceTracker.Application.Common.Interfaces;
 using FinanceTracker.Domain.Entities;
 using FinanceTracker.Domain.ValueObjects;
@@ -34,8 +35,9 @@ namespace FinanceTracker.Application.Features.Transactions.Commands.UpdateTransa
                         && b.Month == month,
                     cancellationToken
                 )
-                ?? throw new KeyNotFoundException(
-                    "Budget not found for the specified category ID and month."
+                ?? throw new NotFoundException(
+                    nameof(Budget),
+                    new { request.CategoryId, Month = month }
                 );
             ;
 
@@ -63,10 +65,7 @@ namespace FinanceTracker.Application.Features.Transactions.Commands.UpdateTransa
                 await context.Transactions.FirstOrDefaultAsync(
                     t => t.UserId == request.UserId && t.Id == request.Id,
                     cancellationToken
-                )
-                ?? throw new KeyNotFoundException(
-                    "Transaction not found for the given user and transaction ID."
-                );
+                ) ?? throw new NotFoundException(nameof(Transaction), new { request.Id });
 
             transaction.UpdateName(request.Name);
             transaction.UpdateAmount(new Money(request.Amount, request.Currency));

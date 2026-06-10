@@ -1,4 +1,6 @@
+using FinanceTracker.Application.Common.Exceptions;
 using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
 using MediatR;
 
 namespace FinanceTracker.Application.Features.Budgets.Commands.DeleteBudget
@@ -14,8 +16,7 @@ namespace FinanceTracker.Application.Features.Budgets.Commands.DeleteBudget
             var budget =
                 context.Budgets.FirstOrDefault(b =>
                     b.Id == request.BudgetId && b.UserId == request.UserId
-                )
-                ?? throw new KeyNotFoundException("Budget not found for the specified budget ID.");
+                ) ?? throw new NotFoundException(nameof(Budget), new { request.BudgetId });
 
             context.Budgets.Remove(budget);
             await context.SaveChangesAsync(cancellationToken);

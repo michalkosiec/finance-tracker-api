@@ -1,7 +1,9 @@
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using FinanceTracker.Application.Common.DTOs.Categories;
+using FinanceTracker.Application.Common.Exceptions;
 using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,7 +22,7 @@ namespace FinanceTracker.Application.Features.Categories.Queries.GetCategoryById
                     .Categories.Where(c => c.Id == request.CategoryId && c.UserId == request.UserId,)
                     .ProjectTo<CategoryResponse>(mapper.ConfigurationProvider)
                     .FirstOrDefaultAsync(cancellationToken)
-                ?? throw new KeyNotFoundException("User not found for the given category and user ID.");
+                ?? throw new NotFoundException(nameof(Category), new { request.CategoryId });
 
             return categoryResponse;
         }

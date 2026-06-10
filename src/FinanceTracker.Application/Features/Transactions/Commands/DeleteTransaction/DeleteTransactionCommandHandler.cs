@@ -1,4 +1,6 @@
+using FinanceTracker.Application.Common.Exceptions;
 using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,9 +19,7 @@ namespace FinanceTracker.Application.Features.Transactions.Commands.DeleteTransa
                     t => t.UserId == request.UserId && t.Id == request.TransactionId,
                     cancellationToken
                 )
-                ?? throw new KeyNotFoundException(
-                    "Transaction not found for the given user ID and transaction ID."
-                );
+                ?? throw new NotFoundException(nameof(Transaction), new { request.TransactionId });
 
             context.Transactions.Remove(transaction);
             await context.SaveChangesAsync(cancellationToken);

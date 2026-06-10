@@ -1,4 +1,6 @@
+using FinanceTracker.Application.Common.Exceptions;
 using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
 using FinanceTracker.Domain.ValueObjects;
 using MediatR;
 
@@ -15,10 +17,7 @@ namespace FinanceTracker.Application.Features.Budgets.Commands.UpdateBudget
             var budget =
                 context.Budgets.FirstOrDefault(b =>
                     b.UserId == request.UserId && b.Id == request.Id
-                )
-                ?? throw new KeyNotFoundException(
-                    "Budget not found for the specified user and budget ID."
-                );
+                ) ?? throw new NotFoundException(nameof(Budget), new { request.Id });
 
             budget.UpdateLimitAmount(new Money(request.LimitAmount, request.Currency));
             budget.UpdateCategory(request.CategoryId);

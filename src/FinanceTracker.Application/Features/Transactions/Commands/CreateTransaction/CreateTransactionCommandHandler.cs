@@ -1,5 +1,6 @@
 using AutoMapper;
 using FinanceTracker.Application.Common.DTOs.Transactions;
+using FinanceTracker.Application.Common.Exceptions;
 using FinanceTracker.Application.Common.Interfaces;
 using FinanceTracker.Domain.Entities;
 using FinanceTracker.Domain.ValueObjects;
@@ -36,8 +37,9 @@ namespace FinanceTracker.Application.Features.Transactions.Commands.CreateTransa
                         && b.Month == month,
                     cancellationToken
                 )
-                ?? throw new KeyNotFoundException(
-                    "Budget not found for the specified category ID and month."
+                ?? throw new NotFoundException(
+                    nameof(Budget),
+                    new { request.CategoryId, Month = month }
                 );
 
             // Change this when adding proper currency handling

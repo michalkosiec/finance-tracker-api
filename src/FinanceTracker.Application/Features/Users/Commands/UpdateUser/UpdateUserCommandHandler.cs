@@ -1,4 +1,6 @@
+using FinanceTracker.Application.Common.Exceptions;
 using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,7 +20,7 @@ namespace FinanceTracker.Application.Features.Users.Commands.UpdateUser
 
             var user =
                 await context.Users.FirstOrDefaultAsync(u => u.Id == request.Id, cancellationToken)
-                ?? throw new KeyNotFoundException("User not found for the given user ID.");
+                ?? throw new NotFoundException(nameof(User), new { request.Id });
 
             user.UpdateName(request.Name);
             user.UpdateEmail(request.Email);
