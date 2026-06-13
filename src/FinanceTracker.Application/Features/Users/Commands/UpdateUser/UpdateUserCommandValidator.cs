@@ -12,7 +12,9 @@ namespace FinanceTracker.Application.Features.Users.Commands.UpdateUser
         {
             _context = context;
 
-            RuleFor(x => x.Id).NotEmpty().WithMessage("User ID is required.");
+            RuleFor(x => x.Id)
+                .NotEqual(Guid.Empty)
+                .WithMessage("The request does not contain a valid User ID.");
 
             RuleFor(x => x.Name)
                 .NotEmpty()

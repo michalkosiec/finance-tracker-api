@@ -7,9 +7,11 @@ namespace FinanceTracker.Application.Features.Transactions.Commands.UpdateTransa
     {
         public UpdateTransactionCommandValidator()
         {
-            RuleFor(x => x.Id).NotEmpty().WithMessage("Id is required.");
+            RuleFor(x => x.Id).NotEqual(Guid.Empty).WithMessage("Valid ID is required.");
 
-            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+            RuleFor(x => x.UserId)
+                .NotEqual(Guid.Empty)
+                .WithMessage("The request does not contain a valid User ID.");
 
             RuleFor(v => v.Name)
                 .NotEmpty()
@@ -26,7 +28,9 @@ namespace FinanceTracker.Application.Features.Transactions.Commands.UpdateTransa
                 .Must(c => c.All(char.IsLetter))
                 .WithMessage("Currency must contain only letters.");
 
-            RuleFor(x => x.CategoryId).NotEmpty().WithMessage("Category is required.");
+            RuleFor(x => x.CategoryId)
+                .NotEqual(Guid.Empty)
+                .WithMessage("Valid category ID is required.");
 
             RuleFor(v => v.Date).NotEmpty().WithMessage("Date is required.");
 

@@ -6,7 +6,9 @@ namespace FinanceTracker.Application.Features.Categories.Queries.GetCategories
     {
         public GetCategoriesQueryValidator()
         {
-            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+            RuleFor(x => x.UserId)
+                .NotEqual(Guid.Empty)
+                .WithMessage("The request does not contain a valid User ID.");
         }
     }
 }

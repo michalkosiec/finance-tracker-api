@@ -6,7 +6,9 @@ namespace FinanceTracker.Application.Features.Budgets.Queries.GetBudgets
     {
         public GetBudgetsQueryValidator()
         {
-            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+            RuleFor(x => x.UserId)
+                .NotEqual(Guid.Empty)
+                .WithMessage("The request does not contain a valid User ID.");
         }
     }
 }

@@ -6,9 +6,13 @@ namespace FinanceTracker.Application.Features.Budgets.Commands.DeleteBudget
     {
         public DeleteBudgetCommandValidator()
         {
-            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+            RuleFor(x => x.UserId)
+                .NotEqual(Guid.Empty)
+                .WithMessage("The request does not contain a valid User ID.");
 
-            RuleFor(x => x.BudgetId).NotEmpty().WithMessage("BudgetId is required.");
+            RuleFor(x => x.BudgetId)
+                .NotEqual(Guid.Empty)
+                .WithMessage("Valid budget ID is required.");
         }
     }
 }

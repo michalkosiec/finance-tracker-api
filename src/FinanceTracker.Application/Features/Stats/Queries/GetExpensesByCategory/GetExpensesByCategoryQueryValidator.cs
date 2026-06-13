@@ -24,7 +24,9 @@ namespace FinanceTracker.Application.Features.Stats.Queries.GetExpensesByCategor
                 .Matches("^[A-Z]{3}$")
                 .WithMessage("Currency must be a 3-letter uppercase ISO code (e.g., USD, EUR).");
 
-            RuleFor(x => x.UserId).NotEmpty().WithMessage("User ID is required.");
+            RuleFor(x => x.UserId)
+                .NotEqual(Guid.Empty)
+                .WithMessage("The request does not contain a valid User ID.");
         }
     }
 }

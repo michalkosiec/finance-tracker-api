@@ -12,7 +12,9 @@ namespace FinanceTracker.Application.Features.Categories.Commands.CreateCategory
         {
             _context = context;
 
-            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+            RuleFor(x => x.UserId)
+                .NotEqual(Guid.Empty)
+                .WithMessage("The request does not contain a valid User ID.");
 
             RuleFor(x => x.Name)
                 .NotEmpty()

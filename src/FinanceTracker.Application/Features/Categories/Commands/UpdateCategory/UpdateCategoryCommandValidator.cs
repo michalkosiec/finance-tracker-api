@@ -13,7 +13,9 @@ namespace FinanceTracker.Application.Features.Categories.Commands.UpdateCategory
             _context = context;
             RuleFor(x => x.Id).NotEmpty().WithMessage("Category ID is required.");
 
-            RuleFor(x => x.UserId).NotEmpty().WithMessage("User ID is required.");
+            RuleFor(x => x.UserId)
+                .NotEqual(Guid.Empty)
+                .WithMessage("The request does not contain a valid User ID.");
 
             RuleFor(x => x.Name)
                 .NotEmpty()

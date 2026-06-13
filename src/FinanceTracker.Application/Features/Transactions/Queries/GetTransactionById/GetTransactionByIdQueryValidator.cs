@@ -6,9 +6,13 @@ namespace FinanceTracker.Application.Features.Transactions.Queries.GetTransactio
     {
         public GetTransactionByIdQueryValidator()
         {
-            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+            RuleFor(x => x.UserId)
+                .NotEqual(Guid.Empty)
+                .WithMessage("The request does not contain a valid User ID.");
 
-            RuleFor(x => x.TransactionId).NotEmpty().WithMessage("TransactionId is required.");
+            RuleFor(x => x.TransactionId)
+                .NotEqual(Guid.Empty)
+                .WithMessage("Valid transaction ID is required.");
         }
     }
 }

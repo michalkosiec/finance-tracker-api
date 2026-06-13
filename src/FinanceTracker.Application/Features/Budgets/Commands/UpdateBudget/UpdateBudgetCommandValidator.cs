@@ -6,10 +6,15 @@ namespace FinanceTracker.Application.Features.Budgets.Commands.UpdateBudget
     {
         public UpdateBudgetCommandValidator()
         {
-            RuleFor(x => x.Id).NotEmpty().WithMessage("Id is required.");
-            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+            RuleFor(x => x.Id).NotEqual(Guid.Empty).WithMessage("Valid ID is required.");
 
-            RuleFor(x => x.CategoryId).NotEmpty().WithMessage("Category is required.");
+            RuleFor(x => x.UserId)
+                .NotEqual(Guid.Empty)
+                .WithMessage("The request does not contain a valid User ID.");
+
+            RuleFor(x => x.CategoryId)
+                .NotEqual(Guid.Empty)
+                .WithMessage("Valid category ID is required.");
 
             RuleFor(x => x.LimitAmount)
                 .GreaterThan(0)
