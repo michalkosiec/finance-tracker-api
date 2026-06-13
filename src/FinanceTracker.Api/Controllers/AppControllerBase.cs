@@ -6,9 +6,9 @@ namespace FinanceTracker.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public abstract class AppControllerBase(IMediator mediator) : ControllerBase
+    public abstract class AppControllerBase(ISender mediator) : ControllerBase
     {
-        protected readonly IMediator Mediator = mediator;
+        protected readonly ISender Mediator = mediator;
 
         protected Guid CurrentUserId
         {
