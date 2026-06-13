@@ -1,14 +1,22 @@
+using FinanceTracker.Application.Common.Interfaces;
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 
 namespace FinanceTracker.Application.Features.Users.Commands.CreateUser
 {
     public class CreateUserCommandValidator : AbstractValidator<CreateUserCommand>
     {
-        public CreateUserCommandValidator()
+        private readonly IAppDbContext _context;
+
+        public CreateUserCommandValidator(IAppDbContext context)
         {
+            _context = context;
+
             RuleFor(x => x.IdentityUserId)
                 .NotEmpty()
-                .WithMessage("The Identity User ID is required to link the account.");
+                .WithMessage("The Identity User ID is required to link the account.")
+                .MustAsync(BeUniqueIdentityId)
+                .WithMessage("The Identity User ID must be unique.");
 
             RuleFor(x => x.Name)
                 .NotEmpty()
@@ -22,7 +30,25 @@ namespace FinanceTracker.Application.Features.Users.Commands.CreateUser
                 .EmailAddress()
                 .WithMessage("A valid email address format is required.")
                 .MaximumLength(200)
-                .WithMessage("Email must not exceed 200 characters.");
+                .WithMessage("Email must not exceed 200 characters.")
+                .MustAsync(BeUniqueEmail)
+                .WithMessage("Email must be unique.");
+        }
+
+        private async Task<bool> BeUniqueIdentityId(
+            string identityId,
+            CancellationToken cancellationToken
+        )
+        {
+            return !await _context.Users.AnyAsync(
+                u => u.IdentityUserId == identityId,
+                cancellationToken
+            );
+        }
+
+        private async Task<bool> BeUniqueEmail(string email, CancellationToken cancellationToken)
+        {
+            return !await _context.Users.AnyAsync(u => u.Email == email, cancellationToken);
         }
     }
 }

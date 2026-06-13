@@ -17,18 +17,11 @@ namespace FinanceTracker.Infrastructure.Persistence
 
         public DbSet<User> Users => Set<User>();
 
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        protected override void OnModelCreating(ModelBuilder builder)
         {
-            base.OnModelCreating(modelBuilder);
+            base.OnModelCreating(builder);
 
-            modelBuilder.Entity<Transaction>(entity =>
-            {
-                entity
-                    .Property(t => t.Month)
-                    .HasComputedColumnSql("date_trunc('month', \"Date\")", stored: true);
-            });
-
-            modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+            builder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
         }
     }
 }

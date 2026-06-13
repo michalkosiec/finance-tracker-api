@@ -1,0 +1,3104 @@
+﻿--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\docker-compose.yml ---
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  api:
+    build:
+      context: ./src/FinanceTracker.Api
+      dockerfile: Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+      - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
+      - Jwt__Key=${JWT_SECRET}
+    ports:
+      - "${API_PORT}:8080"
+    depends_on:
+      migration_tool:
+        condition: service_completed_successfully
+
+  migration_tool:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    volumes:
+      - ./src/FinanceTracker.Api:/Api
+      - /Api/obj
+      - /Api/bin
+    working_dir: /Api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+      - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
+      - Jwt__Key=${JWT_SECRET}
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: >
+      sh -c "dotnet tool install --global dotnet-ef || true &&
+             export PATH=\"$$PATH:/root/.dotnet/tools\" &&
+             dotnet restore &&
+             count=0 &&
+             until dotnet ef database update || [ $count -eq 60 ]; do
+               echo 'Database is not ready, try: $count, retrying in 5s...'
+               sleep 5
+               count=$((count+1))
+             done && 
+             if [ $count -eq 60 ]; then echo 'Database did not start in time!'; exit 1; fi"
+
+volumes:
+  db_data:
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\README.md ---
+![Build and Test](https://github.com/michalkosiec/finance-tracker-api/actions/workflows/dotnet.yml/badge.svg)
+
+# Finance Tracker API
+
+A containerized REST API for personal finance management.
+
+Finance Tracker API provides a backend system designed to track incomes and expenses, organize transactions into custom categories, and manage strict monthly budgets. The architecture enforces multi-tenancy at the database level, ensuring full data isolation between users. It features an automated validation engine that guarantees data integrity and applies financial rulesâ€”such as blocking expenses that exceed predefined category limits.
+
+## Tech Stack Overview
+
+- **Backend:** .NET 10.0 (ASP.NET Core Web API)
+- **Database:** PostgreSQL 15 + Entity Framework Core 10
+- **Infrastructure:** Docker & Docker Compose
+- **API Documentation:** Scalar (OpenAPI integration)
+
+---
+
+## Getting Started
+
+### 1. Configure the environment
+
+Create your local configuration file by copying the provided template:
+
+```bash
+cp .env.example .env
+```
+
+_(Optional: Open the `.env` file to customize your database credentials or ports)._
+
+### 2. Create the infrastructure
+
+Launch the API server with a command:
+
+```bash
+docker-compose up --build
+```
+
+### 3. Explore and test the API
+
+Once started you can interact with the api via given access points:
+
+- **Interactive API Reference:** [http://localhost:5200/scalar](http://localhost:5200/scalar)
+- **Direct API Access:** `http://localhost:5200`
+- **Local Database Access:** `localhost:5935`
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\scripts\script.ps1 ---
+$projectRoot = Split-Path -Parent $PSScriptRoot
+
+$outputFile = Join-Path -Path $projectRoot -ChildPath "streszczenie_projektu.txt"
+
+Write-Host "Generowanie streszczenia z folderu: $projectRoot..." -ForegroundColor Cyan
+
+Get-ChildItem -Path $projectRoot -Recurse -File | 
+    Where-Object { $_.FullName -notmatch 'obj|bin|\.git|\.env' -and $_.FullName -ne $outputFile } | 
+    ForEach-Object { 
+        "--- PLIK: $($_.FullName) ---"
+        Get-Content $_.FullName
+        "" 
+    } | Out-File -FilePath $outputFile -Encoding utf8
+
+Write-Host "Gotowe! Plik zapisano w: $outputFile" -ForegroundColor Green
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\BACKEND.md ---
+# Backend API â€” Technical Specification
+
+This documentation describes the technical architecture and REST API endpoints of the Finance Tracker system. The backend was designed following Clean Code principles and strict data isolation for individual users at the database level.
+
+## Code Architecture
+
+The application implements a layered separation of concerns:
+
+1. **Controllers Layer (controllers/):** Responsible exclusively for authorization, accepting HTTP requests, and returning correct response codes. All user resources inherit from `AppControllerBase`, which automatically extracts the `UserId` from the logged-in user's JWT token.
+2. **Repositories Layer (repositories/):** Implements the generic Repository pattern. The `UserOwnedRepo` class enforces on-the-fly that database queries automatically append the condition `.Where(e => e.UserId == userId)`, preventing leakage or modification of other users' data.
+3. **Business Validation Layer (services/validation_service):** A dedicated service for verifying advanced financial logic rules that cannot be validated using standard model annotations.
+4. **Global Exception Handler (middleware/exception_middleware):** Intercepts application errors at the pipeline level and transforms them into structured JSON responses with appropriate HTTP status codes.
+
+---
+
+## Key Business Rules (Validation Engine)
+
+The application autonomously maintains data integrity using the `ValidationService`:
+
+- **Category Uniqueness:** A user cannot create two categories with the exact same name.
+- **Safe Deletion:** A category cannot be deleted if it is currently linked to any active budget.
+- **Budget Expenditure Integrity:** The system will not allow setting a budget limit for a category to an amount lower than what the user has already physically spent in that given month.
+- **Budget Overage Block:** When attempting to add a new Expense transaction, the system checks the sum of expenses for that month. If the new amount causes the defined budget limit to be exceeded, the transaction is immediately blocked and rejected.
+
+---
+
+## API Endpoints Overview
+
+All endpoints (except registration and login) require an authorization header: `Authorization: Bearer <TOKEN_JWT>`.
+
+### 1. Authentication Module (/auth)
+
+- `POST /auth/register` â€” Registers a new user. Requires a unique email address; the password is automatically hashed before saving.
+- `POST /auth/login` â€” Logs into the system. Verifies credentials using BCrypt and asynchronously generates a secure JWT token valid for 2 hours.
+- `GET /auth/me` â€” Returns the profile of the currently logged-in user (Id, Name, Email) based on the provided token.
+
+### 2. Categories Module (/categories)
+
+Users manage their dictionary of expense/income categories (each category has name, icon, and color fields).
+
+- `GET /categories` â€” Retrieves a list of all categories belonging to the logged-in user.
+- `GET /categories/{id}` â€” Retrieves the details of a specific category.
+- `POST /categories` â€” Creates a new category after verifying name uniqueness.
+- `PUT /categories/{id}` â€” Updates the data of a specific category.
+- `DELETE /categories/{id}` â€” Deletes a category (blocked if linked to budgets).
+
+### 3. Budgets Module (/budgets)
+
+Allows defining expense limits for specific categories on a monthly basis (date format: yyyy-mm).
+
+- `GET /budgets` â€” Retrieves a list of all defined budgets.
+- `GET /budgets/{id}` â€” Retrieves a budget by its ID.
+- `POST /budgets` â€” Sets a new budget limit for a category for a given month.
+- `PUT /budgets/{id}` â€” Updates the limit amount or the assigned category.
+- `DELETE /budgets/{id}` â€” Deletes a budget definition.
+
+### 4. Transactions Module (/transactions)
+
+Registry of financial operations. A transaction has an amount, currency (ISO standard, e.g., PLN), date (yyyy-mm-dd), and type (income / expense).
+
+- `GET /transactions` â€” Retrieves user transactions with optional Query String filtering by parameters: month, categoryid, and type.
+- `POST /transactions` â€” Adds a new transaction (triggers budget limit validation for expenses).
+- `PUT /transactions/{id}` â€” Modifies an existing transaction and recalculates limits.
+- `DELETE /transactions/{id}` â€” Deletes a transaction from history.
+
+### 5. Analytics and Statistics Module (/stats)
+
+- `GET /stats/summary?month=yyyy-mm` â€” Returns a financial summary for the month: total income, total expenses, and the final balance (Income - Expenses).
+- `GET /stats/by-category?month=yyyy-mm` â€” Returns a breakdown of expenses grouped by category, including the total amount and number of transactions for each.
+- `GET /stats/monthly?year=yyyy` â€” Generates a full-year overview, returning an array of 12 months, where the total income and expenses are calculated for each month (useful for generating yearly charts).
+
+---
+
+## Exception Mapping to HTTP Codes (Middleware)
+
+The application eliminates the need to write try-catch blocks in controllers. A global middleware component maps thrown business exceptions to standard network response codes:
+
+| Exception thrown in code    | HTTP Response Code            | Reason / Business Scenario                                                                   |
+| :-------------------------- | :---------------------------- | :------------------------------------------------------------------------------------------- |
+| KeyNotFoundException        | **404 Not Found** | The specified category or transaction does not exist in the database.                        |
+| BadHttpRequestException     | **400 Bad Request** | Business rule violation (category duplicate, budget overage, limit set too low).             |
+| UnauthorizedAccessException | **403 Forbidden** | Attempt to modify or delete a resource belonging to another user (insufficient permissions). |
+| _All other errors_          | **500 Internal Server Error** | An unexpected application error (automatically recorded in system logs).                     |
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.sln ---
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FinanceTracker.Api", "FinanceTracker.Api\FinanceTracker.Api.csproj", "{ED562DFE-B9EF-5F88-771F-EBF333E4D08F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FinanceTracker.Tests", "FinanceTracker.Tests\FinanceTracker.Tests.csproj", "{6BA1B3B1-945A-492C-831C-8DF2B0FBD398}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{ED562DFE-B9EF-5F88-771F-EBF333E4D08F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ED562DFE-B9EF-5F88-771F-EBF333E4D08F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ED562DFE-B9EF-5F88-771F-EBF333E4D08F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{ED562DFE-B9EF-5F88-771F-EBF333E4D08F}.Debug|x64.Build.0 = Debug|Any CPU
+		{ED562DFE-B9EF-5F88-771F-EBF333E4D08F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{ED562DFE-B9EF-5F88-771F-EBF333E4D08F}.Debug|x86.Build.0 = Debug|Any CPU
+		{ED562DFE-B9EF-5F88-771F-EBF333E4D08F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ED562DFE-B9EF-5F88-771F-EBF333E4D08F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ED562DFE-B9EF-5F88-771F-EBF333E4D08F}.Release|x64.ActiveCfg = Release|Any CPU
+		{ED562DFE-B9EF-5F88-771F-EBF333E4D08F}.Release|x64.Build.0 = Release|Any CPU
+		{ED562DFE-B9EF-5F88-771F-EBF333E4D08F}.Release|x86.ActiveCfg = Release|Any CPU
+		{ED562DFE-B9EF-5F88-771F-EBF333E4D08F}.Release|x86.Build.0 = Release|Any CPU
+		{6BA1B3B1-945A-492C-831C-8DF2B0FBD398}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6BA1B3B1-945A-492C-831C-8DF2B0FBD398}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6BA1B3B1-945A-492C-831C-8DF2B0FBD398}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{6BA1B3B1-945A-492C-831C-8DF2B0FBD398}.Debug|x64.Build.0 = Debug|Any CPU
+		{6BA1B3B1-945A-492C-831C-8DF2B0FBD398}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{6BA1B3B1-945A-492C-831C-8DF2B0FBD398}.Debug|x86.Build.0 = Debug|Any CPU
+		{6BA1B3B1-945A-492C-831C-8DF2B0FBD398}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6BA1B3B1-945A-492C-831C-8DF2B0FBD398}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6BA1B3B1-945A-492C-831C-8DF2B0FBD398}.Release|x64.ActiveCfg = Release|Any CPU
+		{6BA1B3B1-945A-492C-831C-8DF2B0FBD398}.Release|x64.Build.0 = Release|Any CPU
+		{6BA1B3B1-945A-492C-831C-8DF2B0FBD398}.Release|x86.ActiveCfg = Release|Any CPU
+		{6BA1B3B1-945A-492C-831C-8DF2B0FBD398}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {181916AD-4E2B-4391-94F4-868AAD457B33}
+	EndGlobalSection
+EndGlobal
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Api\appsettings.Development.json ---
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Api\appsettings.json ---
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "Jwt": {
+    "Issuer": "FinanceTrackerAPI",
+    "Audience": "FinanceTrackerUsers"
+  }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Api\FinanceTracker.Api.csproj ---
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>908d729e-4caa-469e-a326-d00be0ffa03c</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AutoMapper" Version="16.1.1" />
+    <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.7" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.6" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.14.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FinanceTracker.Application\FinanceTracker.Application.csproj" />
+    <ProjectReference Include="..\FinanceTracker.Infrastructure\FinanceTracker.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Api\FinanceTracker.Api.http ---
+@Api_HostAddress = http://localhost:5285
+
+GET {{Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Api\Program.cs ---
+using System.Text;
+using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Scalar.AspNetCore;
+
+var builder = WebApplication.CreateBuilder(args);
+
+var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(
+        name: MyAllowSpecificOrigins,
+        policy =>
+        {
+            policy.WithOrigins("http://localhost:4200").AllowAnyHeader().AllowAnyMethod();
+        }
+    );
+});
+
+builder.Services.AddOpenApi();
+
+builder
+    .Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
+
+var jwtKey =
+    builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key is missing!");
+
+builder
+    .Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero,
+        };
+    });
+
+var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+    app.MapScalarApiReference();
+}
+
+app.UseRouting();
+
+app.UseCors(MyAllowSpecificOrigins);
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Api\Properties\launchSettings.json ---
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:8080",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\DependencyInjection.cs ---
+using System.Reflection;
+using FluentValidation;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace FinanceTracker.Application
+{
+    public static class DependencyInjection
+    {
+        public static IServiceCollection AddApplication(this IServiceCollection services)
+        {
+            services.AddAutoMapper(cfg => cfg.AddMaps(AppDomain.CurrentDomain.GetAssemblies()));
+
+            services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
+
+            services.AddMediatR(cfg =>
+            {
+                cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly());
+            });
+
+            return services;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\FinanceTracker.Application.csproj ---
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\FinanceTracker.Domain\FinanceTracker.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AutoMapper" Version="16.1.1" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
+    <PackageReference Include="MediatR" Version="14.1.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Common\Behaviors\ValidationBehavior.cs ---
+using FluentValidation;
+using MediatR;
+
+namespace FinanceTracker.Application.Common.Behaviors
+{
+    public class ValidationBehavior<TRequest, TResponse>(
+        IEnumerable<IValidator<TRequest>> validators
+    ) : IPipelineBehavior<TRequest, TResponse>
+        where TRequest : notnull, IRequest<TResponse>
+    {
+        public async Task<TResponse> Handle(
+            TRequest request,
+            RequestHandlerDelegate<TResponse> next,
+            CancellationToken cancellationToken
+        )
+        {
+            if (!validators.Any())
+                return await next(cancellationToken);
+
+            var context = new ValidationContext<TRequest>(request);
+
+            var validationResults = await Task.WhenAll(
+                validators.Select(v => v.ValidateAsync(context, cancellationToken))
+            );
+
+            var failures = validationResults
+                .Where(r => r.Errors.Count != 0)
+                .SelectMany(r => r.Errors)
+                .ToList();
+
+            if (failures.Count != 0)
+                throw new Exceptions.ValidationException(failures);
+
+            return await next(cancellationToken);
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Common\DTOs\Budgets\BudgetResponse.cs ---
+namespace FinanceTracker.Application.Common.DTOs.Budgets
+{
+    public record BudgetResponse(
+        Guid Id,
+        Guid UserId,
+        Guid CategoryId,
+        decimal LimitAmount,
+        string Currency,
+        DateTime Month,
+        DateTime CreatedAt,
+        DateTime UpdatedAt
+    ) { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Common\DTOs\Categories\CategoryResponse.cs ---
+namespace FinanceTracker.Application.Common.DTOs.Categories
+{
+    public record CategoryResponse(
+        Guid Id,
+        Guid UserId,
+        string Name,
+        string Icon,
+        string Color,
+        DateTime CreatedAt,
+        DateTime UpdatedAt
+    ) { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Common\DTOs\Transactions\TransactionResponse.cs ---
+using FinanceTracker.Domain.Entities;
+
+namespace FinanceTracker.Application.Common.DTOs.Transactions
+{
+    public record TransactionResponse(
+        Guid Id,
+        Guid UserId,
+        string Name,
+        decimal Amount,
+        string Currency,
+        Guid CategoryId,
+        DateTime Date,
+        TransactionType Type,
+        DateTime UpdatedAt,
+        DateTime CreatedAt
+    ) { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Common\DTOs\Users\UserResponse.cs ---
+namespace FinanceTracker.Application.Common.DTOs.Users
+{
+    public record UserResponse(
+        Guid Id,
+        string Name,
+        string Email,
+        DateTime CreatedAt,
+        DateTime UpdatedAt
+    ) { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Common\Exceptions\ConflictException.cs ---
+namespace FinanceTracker.Application.Common.Exceptions
+{
+    public class ConflictException : Exception
+    {
+        public ConflictException()
+            : base() { }
+
+        public ConflictException(string message)
+            : base(message) { }
+
+        public ConflictException(string message, Exception innerException)
+            : base(message, innerException) { }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Common\Exceptions\NotFoundException.cs ---
+namespace FinanceTracker.Application.Common.Exceptions
+{
+    public class NotFoundException : Exception
+    {
+        public NotFoundException()
+            : base() { }
+
+        public NotFoundException(string message)
+            : base(message) { }
+
+        public NotFoundException(string name, object key)
+            : base($"Entity \"{name}\" ({key}) was not found.") { }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Common\Exceptions\ValidationException.cs ---
+using FluentValidation.Results;
+
+namespace FinanceTracker.Application.Common.Exceptions
+{
+    public class ValidationException : Exception
+    {
+        public IDictionary<string, string[]> Errors { get; }
+
+        public ValidationException()
+            : base("One or more validation failures have occurred.")
+        {
+            Errors = new Dictionary<string, string[]>();
+        }
+
+        public ValidationException(IEnumerable<ValidationFailure> failures)
+            : this()
+        {
+            Errors = failures
+                .GroupBy(e => e.PropertyName, e => e.ErrorMessage)
+                .ToDictionary(
+                    failureGroup => failureGroup.Key,
+                    failureGroup => failureGroup.ToArray()
+                );
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Common\Interfaces\IAppDbContext.cs ---
+using FinanceTracker.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Common.Interfaces
+{
+    public interface IAppDbContext
+    {
+        DbSet<Budget> Budgets { get; }
+        DbSet<Category> Categories { get; }
+        DbSet<Transaction> Transactions { get; }
+        DbSet<User> Users { get; }
+
+        /// <summary>
+        /// Saves all changes made in this context to the database.
+        /// </summary>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>The number of state entries written to the database.</returns>
+        Task<int> SaveChangesAsync(CancellationToken cancellationToken);
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Common\Profiles\BudgetProfile.cs ---
+using AutoMapper;
+using FinanceTracker.Application.Common.DTOs.Budgets;
+using FinanceTracker.Domain.Entities;
+
+namespace FinanceTracker.Application.Common.Profiles
+{
+    public class BudgetProfile : Profile
+    {
+        public BudgetProfile()
+        {
+            CreateMap<Budget, BudgetResponse>();
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Common\Profiles\CategoryProfile.cs ---
+using AutoMapper;
+using FinanceTracker.Application.Common.DTOs.Categories;
+using FinanceTracker.Domain.Entities;
+
+namespace FinanceTracker.Application.Common.Profiles
+{
+    public class CategoryProfile : Profile
+    {
+        public CategoryProfile()
+        {
+            CreateMap<Category, CategoryResponse>();
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Common\Profiles\TransactionProfile.cs ---
+using AutoMapper;
+using FinanceTracker.Application.Common.DTOs.Transactions;
+using FinanceTracker.Domain.Entities;
+
+namespace FinanceTracker.Application.Common.Profiles
+{
+    public class TransactionProfile : Profile
+    {
+        public TransactionProfile()
+        {
+            CreateMap<Transaction, TransactionResponse>();
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Common\Profiles\UserProfile.cs ---
+using AutoMapper;
+using FinanceTracker.Application.Common.DTOs.Users;
+using FinanceTracker.Domain.Entities;
+
+namespace FinanceTracker.Application.Common.Profiles
+{
+    public class UserProfile : Profile
+    {
+        public UserProfile()
+        {
+            CreateMap<User, UserResponse>();
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Budgets\Commands\CreateBudget\CreateBudgetCommand.cs ---
+using FinanceTracker.Application.Common.DTOs.Budgets;
+using FinanceTracker.Domain.ValueObjects;
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Budgets.Commands.CreateBudget
+{
+    public record CreateBudgetCommand(
+        Guid UserId,
+        Guid CategoryId,
+        decimal LimitAmount,
+        string Currency,
+        DateTime Month
+    ) : IRequest<BudgetResponse> { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Budgets\Commands\CreateBudget\CreateBudgetCommandHandler.cs ---
+using AutoMapper;
+using FinanceTracker.Application.Common.DTOs.Budgets;
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using FinanceTracker.Domain.ValueObjects;
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Budgets.Commands.CreateBudget
+{
+    public class CreateBudgetCommandHandler(IAppDbContext context, IMapper mapper)
+        : IRequestHandler<CreateBudgetCommand, BudgetResponse>
+    {
+        public async Task<BudgetResponse> Handle(
+            CreateBudgetCommand request,
+            CancellationToken cancellationToken
+        )
+        {
+            var budget = Budget.Create(
+                request.UserId,
+                request.CategoryId,
+                new Money(request.LimitAmount, request.Currency),
+                request.Month
+            );
+
+            context.Budgets.Add(budget);
+            await context.SaveChangesAsync(cancellationToken);
+
+            return mapper.Map<BudgetResponse>(budget);
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Budgets\Commands\CreateBudget\CreateBudgetCommandValidator.cs ---
+using FluentValidation;
+
+namespace FinanceTracker.Application.Features.Budgets.Commands.CreateBudget
+{
+    public class CreateBudgetCommandValidator : AbstractValidator<CreateBudgetCommand>
+    {
+        public CreateBudgetCommandValidator()
+        {
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+
+            RuleFor(x => x.CategoryId).NotEmpty().WithMessage("Category is required.");
+
+            RuleFor(x => x.LimitAmount)
+                .GreaterThan(0)
+                .WithMessage("Limit amount must be a positive value.");
+
+            RuleFor(x => x.Currency)
+                .NotEmpty()
+                .Length(3)
+                .WithMessage("Currency must be a valid 3-character code.")
+                .Must(c => c.All(char.IsLetter))
+                .WithMessage("Currency must contain only letters.");
+
+            RuleFor(x => x.Month)
+                .NotEmpty()
+                .WithMessage("Month is required.")
+                .Must(m => m.Day == 1)
+                .WithMessage("Month must be the first day of the month.");
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Budgets\Commands\DeleteBudget\DeleteBudgetCommand.cs ---
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Budgets.Commands.DeleteBudget
+{
+    public record DeleteBudgetCommand(Guid UserId, Guid BudgetId) : IRequest<Unit> { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Budgets\Commands\DeleteBudget\DeleteBudgetCommandHandler.cs ---
+using FinanceTracker.Application.Common.Exceptions;
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Budgets.Commands.DeleteBudget
+{
+    public class DeleteBudgetCommandHandler(IAppDbContext context)
+        : IRequestHandler<DeleteBudgetCommand, Unit>
+    {
+        public async Task<Unit> Handle(
+            DeleteBudgetCommand request,
+            CancellationToken cancellationToken
+        )
+        {
+            var budget =
+                context.Budgets.FirstOrDefault(b =>
+                    b.Id == request.BudgetId && b.UserId == request.UserId
+                ) ?? throw new NotFoundException(nameof(Budget), new { request.BudgetId });
+
+            context.Budgets.Remove(budget);
+            await context.SaveChangesAsync(cancellationToken);
+
+            return Unit.Value;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Budgets\Commands\DeleteBudget\DeleteBudgetCommandValidator.cs ---
+using FluentValidation;
+
+namespace FinanceTracker.Application.Features.Budgets.Commands.DeleteBudget
+{
+    public class DeleteBudgetCommandValidator : AbstractValidator<DeleteBudgetCommand>
+    {
+        public DeleteBudgetCommandValidator()
+        {
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+
+            RuleFor(x => x.BudgetId).NotEmpty().WithMessage("BudgetId is required.");
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Budgets\Commands\UpdateBudget\UpdateBudgetCommand.cs ---
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Budgets.Commands.UpdateBudget
+{
+    public record UpdateBudgetCommand(
+        Guid Id,
+        Guid UserId,
+        Guid CategoryId,
+        decimal LimitAmount,
+        string Currency,
+        DateTime Month
+    ) : IRequest<Unit> { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Budgets\Commands\UpdateBudget\UpdateBudgetCommandHandler.cs ---
+using FinanceTracker.Application.Common.Exceptions;
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using FinanceTracker.Domain.ValueObjects;
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Budgets.Commands.UpdateBudget
+{
+    public class UpdateBudgetCommandHandler(IAppDbContext context)
+        : IRequestHandler<UpdateBudgetCommand, Unit>
+    {
+        public async Task<Unit> Handle(
+            UpdateBudgetCommand request,
+            CancellationToken cancellationToken
+        )
+        {
+            var budget =
+                context.Budgets.FirstOrDefault(b =>
+                    b.UserId == request.UserId && b.Id == request.Id
+                ) ?? throw new NotFoundException(nameof(Budget), new { request.Id });
+
+            budget.UpdateLimitAmount(new Money(request.LimitAmount, request.Currency));
+            budget.UpdateCategory(request.CategoryId);
+
+            await context.SaveChangesAsync(cancellationToken);
+
+            return Unit.Value;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Budgets\Commands\UpdateBudget\UpdateBudgetCommandValidator.cs ---
+using FluentValidation;
+
+namespace FinanceTracker.Application.Features.Budgets.Commands.UpdateBudget
+{
+    public class UpdateBudgetCommandValidator : AbstractValidator<UpdateBudgetCommand>
+    {
+        public UpdateBudgetCommandValidator()
+        {
+            RuleFor(x => x.Id).NotEmpty().WithMessage("Id is required.");
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+
+            RuleFor(x => x.CategoryId).NotEmpty().WithMessage("Category is required.");
+
+            RuleFor(x => x.LimitAmount)
+                .GreaterThan(0)
+                .WithMessage("Limit amount must be a positive value.");
+
+            RuleFor(x => x.Currency)
+                .NotEmpty()
+                .Length(3)
+                .WithMessage("Currency must be a valid 3-character code.")
+                .Must(c => c.All(char.IsLetter))
+                .WithMessage("Currency must contain only letters.");
+
+            RuleFor(x => x.Month)
+                .NotEmpty()
+                .WithMessage("Month is required.")
+                .Must(m => m.Day == 1)
+                .WithMessage("Month must be the first day of the month.");
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Budgets\Queries\GetBudgetById\GetBudgetByIdQuery.cs ---
+using FinanceTracker.Application.Common.DTOs.Budgets;
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Budgets.Queries.GetBudgetById
+{
+    public record GetBudgetByIdQuery(Guid UserId, Guid BudgetId) : IRequest<BudgetResponse> { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Budgets\Queries\GetBudgetById\GetBudgetByIdQueryHandler.cs ---
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using FinanceTracker.Application.Common.DTOs.Budgets;
+using FinanceTracker.Application.Common.Exceptions;
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Budgets.Queries.GetBudgetById
+{
+    public class GetBudgetByIdQueryHandler(IAppDbContext context, IMapper mapper)
+        : IRequestHandler<GetBudgetByIdQuery, BudgetResponse>
+    {
+        public async Task<BudgetResponse> Handle(
+            GetBudgetByIdQuery request,
+            CancellationToken cancellationToken
+        )
+        {
+            var budgetResponse =
+                await context
+                    .Budgets.Where(b => b.Id == request.BudgetId && b.UserId == request.UserId)
+                    .ProjectTo<BudgetResponse>(mapper.ConfigurationProvider)
+                    .FirstOrDefaultAsync(cancellationToken)
+                ?? throw new NotFoundException(nameof(Budget), new { request.BudgetId });
+
+            return budgetResponse;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Budgets\Queries\GetBudgetById\GetBudgetByIdQueryValidator.cs ---
+using FluentValidation;
+
+namespace FinanceTracker.Application.Features.Budgets.Queries.GetBudgetById
+{
+    public class GetBudgetByIdQueryValidator : AbstractValidator<GetBudgetByIdQuery>
+    {
+        public GetBudgetByIdQueryValidator()
+        {
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+
+            RuleFor(x => x.BudgetId).NotEmpty().WithMessage("BudgetId is required.");
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Budgets\Queries\GetBudgets\GetBudgetsQuery.cs ---
+using FinanceTracker.Application.Common.DTOs.Budgets;
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Budgets.Queries.GetBudgets
+{
+    public record GetBudgetsQuery(Guid UserId) : IRequest<IReadOnlyCollection<BudgetResponse>> { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Budgets\Queries\GetBudgets\GetBudgetsQueryHandler.cs ---
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using FinanceTracker.Application.Common.DTOs.Budgets;
+using FinanceTracker.Application.Common.Interfaces;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Budgets.Queries.GetBudgets
+{
+    public class GetBudgetsQueryHandler(IAppDbContext context, IMapper mapper)
+        : IRequestHandler<GetBudgetsQuery, IReadOnlyCollection<BudgetResponse>>
+    {
+        public async Task<IReadOnlyCollection<BudgetResponse>> Handle(
+            GetBudgetsQuery request,
+            CancellationToken cancellationToken
+        )
+        {
+            return await context
+                .Budgets.AsNoTracking()
+                .Where(b => b.UserId == request.UserId)
+                .ProjectTo<BudgetResponse>(mapper.ConfigurationProvider)
+                .ToListAsync(cancellationToken);
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Budgets\Queries\GetBudgets\GetBudgetsQueryValidator.cs ---
+using FluentValidation;
+
+namespace FinanceTracker.Application.Features.Budgets.Queries.GetBudgets
+{
+    public class GetBudgetsQueryValidator : AbstractValidator<GetBudgetsQuery>
+    {
+        public GetBudgetsQueryValidator()
+        {
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Categories\Commands\CreateCategory\CreateCategoryCommand.cs ---
+using FinanceTracker.Application.Common.DTOs.Categories;
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Categories.Commands.CreateCategory
+{
+    public record CreateCategoryCommand(Guid UserId, string Name, string Icon, string Color)
+        : IRequest<CategoryResponse> { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Categories\Commands\CreateCategory\CreateCategoryCommandHandler.cs ---
+using AutoMapper;
+using FinanceTracker.Application.Common.DTOs.Categories;
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Categories.Commands.CreateCategory
+{
+    public class CreateCategoryCommandHandler(IAppDbContext context, IMapper mapper)
+        : IRequestHandler<CreateCategoryCommand, CategoryResponse>
+    {
+        public async Task<CategoryResponse> Handle(
+            CreateCategoryCommand request,
+            CancellationToken cancellationToken
+        )
+        {
+            Category category = Category.Create(
+                request.UserId,
+                request.Name,
+                request.Icon,
+                request.Color
+            );
+
+            context.Categories.Add(category);
+            await context.SaveChangesAsync(cancellationToken);
+
+            return mapper.Map<CategoryResponse>(category);
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Categories\Commands\CreateCategory\CreateCategoryCommandValidator.cs ---
+using FinanceTracker.Application.Common.Interfaces;
+using FluentValidation;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Categories.Commands.CreateCategory
+{
+    public class CreateCategoryCommandValidator : AbstractValidator<CreateCategoryCommand>
+    {
+        private readonly IAppDbContext _context;
+
+        public CreateCategoryCommandValidator(IAppDbContext context)
+        {
+            _context = context;
+
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+
+            RuleFor(x => x.Name)
+                .NotEmpty()
+                .WithMessage("Name is required.")
+                .MaximumLength(100)
+                .WithMessage("Name must be at most 100 characters long.")
+                .MustAsync(BeUniqueNameForUser)
+                .WithMessage("Category name must be unique");
+
+            RuleFor(x => x.Icon)
+                .MaximumLength(100)
+                .WithMessage("Icon must be at most 100 characters long.");
+
+            RuleFor(x => x.Color)
+                .MaximumLength(20)
+                .WithMessage("Color must be at most 20 characters long.");
+        }
+
+        private async Task<bool> BeUniqueNameForUser(
+            CreateCategoryCommand command,
+            string name,
+            CancellationToken cancellationToken
+        )
+        {
+            bool exists = await _context.Categories.AnyAsync(
+                c => c.UserId == command.UserId && c.Name == name,
+                cancellationToken
+            );
+
+            return !exists;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Categories\Commands\DeleteCategory\DeleteCategoryCommand.cs ---
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Categories.Commands.DeleteCategory
+{
+    public record DeleteCategoryCommand(Guid UserId, Guid CategoryId) : IRequest<Unit>;
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Categories\Commands\DeleteCategory\DeleteCategoryCommandHandler.cs ---
+using FinanceTracker.Application.Common.Exceptions;
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Categories.Commands.DeleteCategory
+{
+    public class DeleteCategoryCommandHandler(IAppDbContext context)
+        : IRequestHandler<DeleteCategoryCommand, Unit>
+    {
+        public async Task<Unit> Handle(
+            DeleteCategoryCommand request,
+            CancellationToken cancellationToken
+        )
+        {
+            var category =
+                await context.Categories.FirstOrDefaultAsync(
+                    c => c.Id == request.CategoryId && c.UserId == request.UserId,
+                    cancellationToken
+                ) ?? throw new NotFoundException(nameof(Category), new { request.CategoryId });
+
+            var isReferenced =
+                await context.Budgets.AnyAsync(
+                    b => b.CategoryId == request.CategoryId,
+                    cancellationToken
+                )
+                || await context.Transactions.AnyAsync(
+                    t => t.CategoryId == request.CategoryId,
+                    cancellationToken
+                );
+
+            if (isReferenced)
+                throw new ConflictException(
+                    "Cannot delete this category because it is associated with existing budget or transaction"
+                );
+
+            context.Categories.Remove(category);
+
+            await context.SaveChangesAsync(cancellationToken);
+
+            return Unit.Value;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Categories\Commands\DeleteCategory\DeleteCategoryCommandValidator.cs ---
+using FluentValidation;
+
+namespace FinanceTracker.Application.Features.Categories.Commands.DeleteCategory
+{
+    public class DeleteCategoryCommandValidator : AbstractValidator<DeleteCategoryCommand>
+    {
+        public DeleteCategoryCommandValidator()
+        {
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("User ID is required.");
+
+            RuleFor(x => x.CategoryId).NotEmpty().WithMessage("Category ID is required.");
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Categories\Commands\UpdateCategory\UpdateCategoryCommand.cs ---
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Categories.Commands.UpdateCategory
+{
+    public record UpdateCategoryCommand(
+        Guid Id,
+        Guid UserId,
+        string Name,
+        string Icon,
+        string Color
+    ) : IRequest<Unit> { };
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Categories\Commands\UpdateCategory\UpdateCategoryCommandHandler.cs ---
+using FinanceTracker.Application.Common.Exceptions;
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Categories.Commands.UpdateCategory
+{
+    public class UpdateCategoryCommandHandler(IAppDbContext context)
+        : IRequestHandler<UpdateCategoryCommand, Unit>
+    {
+        public async Task<Unit> Handle(
+            UpdateCategoryCommand request,
+            CancellationToken cancellationToken
+        )
+        {
+            var category =
+                context.Categories.FirstOrDefault(c =>
+                    c.Id == request.Id && c.UserId == request.UserId
+                ) ?? throw new NotFoundException(nameof(Category), new { request.Id });
+
+            category.UpdateName(request.Name);
+            category.UpdateIcon(request.Icon);
+            category.UpdateColor(request.Color);
+
+            context.Categories.Update(category);
+
+            await context.SaveChangesAsync(cancellationToken);
+
+            return Unit.Value;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Categories\Commands\UpdateCategory\UpdateCategoryCommandValidator.cs ---
+using FinanceTracker.Application.Common.Interfaces;
+using FluentValidation;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Categories.Commands.UpdateCategory
+{
+    public class UpdateCategoryCommandValidator : AbstractValidator<UpdateCategoryCommand>
+    {
+        private readonly IAppDbContext _context;
+
+        public UpdateCategoryCommandValidator(IAppDbContext context)
+        {
+            _context = context;
+            RuleFor(x => x.Id).NotEmpty().WithMessage("Category ID is required.");
+
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("User ID is required.");
+
+            RuleFor(x => x.Name)
+                .NotEmpty()
+                .WithMessage("Name is required.")
+                .MaximumLength(100)
+                .WithMessage("Name cannot exceed 100 characters.")
+                .MustAsync(BeUniqueNameForUser)
+                .WithMessage("Category name must be unique.");
+
+            RuleFor(x => x.Icon)
+                .NotEmpty()
+                .WithMessage("Icon is required.")
+                .MaximumLength(50)
+                .WithMessage("Icon cannot exceed 50 characters.");
+
+            RuleFor(x => x.Color)
+                .NotEmpty()
+                .WithMessage("Color is required.")
+                .Matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")
+                .WithMessage("Color must be a valid hex code (e.g., #FFFFFF or #FFF).");
+        }
+
+        private async Task<bool> BeUniqueNameForUser(
+            UpdateCategoryCommand command,
+            string name,
+            CancellationToken cancellationToken
+        )
+        {
+            bool exists = await _context.Categories.AnyAsync(
+                c => c.UserId == command.UserId && c.Name == name,
+                cancellationToken
+            );
+
+            return !exists;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Categories\Queries\GetCategories\GetCategoriesQuery.cs ---
+using FinanceTracker.Application.Common.DTOs.Categories;
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Categories.Queries.GetCategories
+{
+    public record GetCategoriesQuery(Guid UserId)
+        : IRequest<IReadOnlyCollection<CategoryResponse>> { };
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Categories\Queries\GetCategories\GetCategoriesQueryHandler.cs ---
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using FinanceTracker.Application.Common.DTOs.Categories;
+using FinanceTracker.Application.Common.Interfaces;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Categories.Queries.GetCategories
+{
+    public class GetCategoriesQueryHandler(IAppDbContext context, IMapper mapper)
+        : IRequestHandler<GetCategoriesQuery, IReadOnlyCollection<CategoryResponse>>
+    {
+        public async Task<IReadOnlyCollection<CategoryResponse>> Handle(
+            GetCategoriesQuery request,
+            CancellationToken cancellationToken
+        )
+        {
+            return await context
+                .Categories.AsNoTracking()
+                .Where(c => c.UserId == request.UserId)
+                .ProjectTo<CategoryResponse>(mapper.ConfigurationProvider)
+                .ToListAsync(cancellationToken);
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Categories\Queries\GetCategories\GetCategoriesQueryValidator.cs ---
+using FluentValidation;
+
+namespace FinanceTracker.Application.Features.Categories.Queries.GetCategories
+{
+    public class GetCategoriesQueryValidator : AbstractValidator<GetCategoriesQuery>
+    {
+        public GetCategoriesQueryValidator()
+        {
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Categories\Queries\GetCategoryById\GetCategoryByIdQuery.cs ---
+using FinanceTracker.Application.Common.DTOs.Categories;
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Categories.Queries.GetCategoryById
+{
+    public record GetCategoryByIdQuery(Guid UserId, Guid CategoryId)
+        : IRequest<CategoryResponse> { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Categories\Queries\GetCategoryById\GetCategoryByIdQueryHandler.cs ---
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using FinanceTracker.Application.Common.DTOs.Categories;
+using FinanceTracker.Application.Common.Exceptions;
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Categories.Queries.GetCategoryById
+{
+    public class GetCategoryByIdQueryHandler(IAppDbContext context, IMapper mapper)
+        : IRequestHandler<GetCategoryByIdQuery, CategoryResponse>
+    {
+        public async Task<CategoryResponse> Handle(
+            GetCategoryByIdQuery request,
+            CancellationToken cancellationToken
+        )
+        {
+            var categoryResponse =
+                await context
+                    .Categories.Where(c => c.Id == request.CategoryId && c.UserId == request.UserId)
+                    .ProjectTo<CategoryResponse>(mapper.ConfigurationProvider)
+                    .FirstOrDefaultAsync(cancellationToken)
+                ?? throw new NotFoundException(nameof(Category), new { request.CategoryId });
+
+            return categoryResponse;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Categories\Queries\GetCategoryById\GetCategoryByIdQueryValidator.cs ---
+using FluentValidation;
+
+namespace FinanceTracker.Application.Features.Categories.Queries.GetCategoryById
+{
+    public class GetCategoryByIdQueryValidator : AbstractValidator<GetCategoryByIdQuery>
+    {
+        public GetCategoryByIdQueryValidator()
+        {
+            RuleFor(q => q.UserId).NotEmpty().WithMessage("User ID is required.");
+
+            RuleFor(q => q.CategoryId).NotEmpty().WithMessage("Category ID is required.");
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Stats\Queries\GetExpensesByCategory\GetExpensesByCategoryQuery.cs ---
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Stats.Queries.GetExpensesByCategory
+{
+    public record CategoryStatResponse(
+        string CategoryName,
+        decimal TotalExpense,
+        int NumberOfTransactions
+    );
+
+    public record ExpensesByCategoryResponse(
+        IReadOnlyCollection<CategoryStatResponse> CategoryStats,
+        string Currency
+    );
+
+    public record GetExpensesByCategoryQuery(int Year, int Month, string Currency, Guid UserId)
+        : IRequest<ExpensesByCategoryResponse>;
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Stats\Queries\GetExpensesByCategory\GetExpensesByCategoryQueryHandler.cs ---
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Stats.Queries.GetExpensesByCategory
+{
+    public class GetExpensesByCategoryQueryHandler(IAppDbContext context)
+        : IRequestHandler<GetExpensesByCategoryQuery, ExpensesByCategoryResponse>
+    {
+        public async Task<ExpensesByCategoryResponse> Handle(
+            GetExpensesByCategoryQuery request,
+            CancellationToken cancellationToken
+        )
+        {
+            var query =
+                from t in context.Transactions
+                where
+                    t.UserId == request.UserId
+                    && t.Date.Year == request.Year
+                    && t.Date.Month == request.Month
+                    && t.Type == TransactionType.Expense
+                    && t.Amount.Currency == request.Currency
+                join c in context.Categories on t.CategoryId equals c.Id
+                group t by c.Name into groupedData
+                select new CategoryStatResponse(
+                    groupedData.Key,
+                    groupedData.Sum(x => x.Amount.Amount),
+                    groupedData.Count()
+                );
+
+            var categoryStats = await query
+                .OrderByDescending(x => x.TotalExpense)
+                .ToListAsync(cancellationToken);
+
+            return new ExpensesByCategoryResponse(categoryStats, request.Currency);
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Stats\Queries\GetExpensesByCategory\GetExpensesByCategoryQueryValidator.cs ---
+using FluentValidation;
+
+namespace FinanceTracker.Application.Features.Stats.Queries.GetExpensesByCategory
+{
+    public class GetExpensesByCategoryQueryValidator : AbstractValidator<GetExpensesByCategoryQuery>
+    {
+        public GetExpensesByCategoryQueryValidator()
+        {
+            RuleFor(x => x.Year)
+                .GreaterThan(1990)
+                .WithMessage("Year must be greater than 1990.")
+                .LessThanOrEqualTo(DateTime.UtcNow.Year + 15)
+                .WithMessage("Year cannot be too far in the future.");
+
+            RuleFor(x => x.Month)
+                .InclusiveBetween(1, 12)
+                .WithMessage("Month must be between 1 and 12.");
+
+            RuleFor(x => x.Currency)
+                .NotEmpty()
+                .WithMessage("Currency is required.")
+                .Length(3)
+                .WithMessage("Currency must be exactly 3 characters.")
+                .Matches("^[A-Z]{3}$")
+                .WithMessage("Currency must be a 3-letter uppercase ISO code (e.g., USD, EUR).");
+
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("User ID is required.");
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Stats\Queries\GetMonthlyStats\GetMonthlyStatsQuery.cs ---
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Stats.Queries.GetMonthlyStats
+{
+    public record MonthlyStatResponse(string Month, decimal TotalIncome, decimal TotalExpense);
+
+    public record MonthlyStatsResponse(
+        IReadOnlyCollection<MonthlyStatResponse> MonthlyStats,
+        string Currency
+    );
+
+    public record GetMonthlyStatsQuery(int Year, string Currency, Guid UserId)
+        : IRequest<MonthlyStatsResponse> { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Stats\Queries\GetMonthlyStats\GetMonthlyStatsQueryHandler.cs ---
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Stats.Queries.GetMonthlyStats
+{
+    public class GetMonthlyStatsQueryHandler(IAppDbContext context)
+        : IRequestHandler<GetMonthlyStatsQuery, MonthlyStatsResponse>
+    {
+        public async Task<MonthlyStatsResponse> Handle(
+            GetMonthlyStatsQuery request,
+            CancellationToken cancellationToken
+        )
+        {
+            // change after implementing currency handling
+            var rawStats = await context
+                .Transactions.Where(t => t.UserId == request.UserId && t.Date.Year == request.Year)
+                .GroupBy(t => new { t.Date.Month, t.Type })
+                .Select(g => new
+                {
+                    g.Key.Month,
+                    g.Key.Type,
+                    Total = g.Sum(t => t.Amount.Amount),
+                })
+                .ToListAsync(cancellationToken);
+
+            var monthlyStats = new List<MonthlyStatResponse>(12);
+
+            for (int i = 1; i <= 12; i++)
+            {
+                var income =
+                    rawStats
+                        .FirstOrDefault(x => x.Month == i && x.Type == TransactionType.Income)
+                        ?.Total
+                    ?? 0m;
+
+                var expense =
+                    rawStats
+                        .FirstOrDefault(x => x.Month == i && x.Type == TransactionType.Expense)
+                        ?.Total
+                    ?? 0m;
+
+                monthlyStats.Add(
+                    new MonthlyStatResponse($"{request.Year}-{i:D2}", income, expense)
+                );
+            }
+
+            return new MonthlyStatsResponse(monthlyStats, request.Currency);
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Stats\Queries\GetMonthlyStats\GetMonthlyStatsQueryValidator.cs ---
+using FluentValidation;
+
+namespace FinanceTracker.Application.Features.Stats.Queries.GetMonthlyStats
+{
+    public class GetMonthlyStatsQueryValidator : AbstractValidator<GetMonthlyStatsQuery>
+    {
+        public GetMonthlyStatsQueryValidator()
+        {
+            RuleFor(x => x.Year)
+                .GreaterThan(1990)
+                .WithMessage("Year must be greater than 1990.")
+                .LessThanOrEqualTo(DateTime.UtcNow.Year + 15)
+                .WithMessage("Year cannot be too far in the future.");
+
+            RuleFor(x => x.Currency)
+                .NotEmpty()
+                .WithMessage("Currency is required.")
+                .Length(3)
+                .WithMessage("Currency must be exactly 3 characters.")
+                .Matches("^[A-Z]{3}$")
+                .WithMessage("Currency must be a 3-letter uppercase ISO code (e.g., USD, EUR).");
+
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("User ID is required.");
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Stats\Queries\GetSummary\GetSummaryQuery.cs ---
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Stats.Queries.GetSummary
+{
+    public record StatsSummaryResponse(
+        string Month,
+        decimal TotalIncome,
+        decimal TotalExpense,
+        decimal Balance,
+        string Currency
+    ) { }
+
+    public record GetSummaryQuery(int Year, int Month, string Currency, Guid UserId)
+        : IRequest<StatsSummaryResponse> { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Stats\Queries\GetSummary\GetSummaryQueryHandler.cs ---
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Stats.Queries.GetSummary
+{
+    public class GetSummaryQueryHandler(IAppDbContext context)
+        : IRequestHandler<GetSummaryQuery, StatsSummaryResponse>
+    {
+        public async Task<StatsSummaryResponse> Handle(
+            GetSummaryQuery request,
+            CancellationToken cancellationToken
+        )
+        {
+            // change after adding proper currency handling
+
+            var totalIncome = await context
+                .Transactions.Where(t =>
+                    t.UserId == request.UserId
+                    && t.Date.Year == request.Year
+                    && t.Date.Month == request.Month
+                    && t.Type == TransactionType.Income
+                )
+                .SumAsync(t => t.Amount.Amount, cancellationToken);
+
+            var totalExpense = await context
+                .Transactions.Where(t =>
+                    t.UserId == request.UserId
+                    && t.Date.Year == request.Year
+                    && t.Date.Month == request.Month
+                    && t.Type == TransactionType.Expense
+                )
+                .SumAsync(t => t.Amount.Amount, cancellationToken);
+
+            var balance = totalIncome - totalExpense;
+
+            return new StatsSummaryResponse(
+                $"{request.Year}-{request.Month:D2}",
+                totalIncome,
+                totalExpense,
+                balance,
+                request.Currency
+            );
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Stats\Queries\GetSummary\GetSummaryQueryValidator.cs ---
+using FluentValidation;
+
+namespace FinanceTracker.Application.Features.Stats.Queries.GetSummary
+{
+    public class GetSummaryQueryValidator : AbstractValidator<GetSummaryQuery>
+    {
+        public GetSummaryQueryValidator()
+        {
+            RuleFor(x => x.Year).GreaterThan(1990).WithMessage("Year must be greater than 1990.");
+
+            RuleFor(x => x.Month)
+                .InclusiveBetween(1, 12)
+                .WithMessage("Month must be between 1 and 12.");
+
+            RuleFor(x => x.Currency)
+                .NotEmpty()
+                .WithMessage("Currency is required.")
+                .Length(3)
+                .WithMessage("Currency must be exactly 3 characters.")
+                .Matches("^[A-Z]{3}$")
+                .WithMessage("Currency must be a 3-letter uppercase ISO code (e.g., USD, EUR).");
+
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("User ID is required.");
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Transactions\Commands\CreateTransaction\CreateTransactionCommand.cs ---
+using FinanceTracker.Application.Common.DTOs.Transactions;
+using FinanceTracker.Domain.Entities;
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Transactions.Commands.CreateTransaction
+{
+    public record CreateTransactionCommand(
+        Guid UserId,
+        string Name,
+        decimal Amount,
+        string Currency,
+        Guid CategoryId,
+        DateTime Date,
+        TransactionType Type
+    ) : IRequest<TransactionResponse> { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Transactions\Commands\CreateTransaction\CreateTransactionCommandHandler.cs ---
+using AutoMapper;
+using FinanceTracker.Application.Common.DTOs.Transactions;
+using FinanceTracker.Application.Common.Exceptions;
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using FinanceTracker.Domain.ValueObjects;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Transactions.Commands.CreateTransaction
+{
+    public class CreateTransactionCommandHandler(IAppDbContext context, IMapper mapper)
+        : IRequestHandler<CreateTransactionCommand, TransactionResponse>
+    {
+        public async Task<TransactionResponse> Handle(
+            CreateTransactionCommand request,
+            CancellationToken cancellationToken
+        )
+        {
+            DateTime month = new(
+                request.Date.Year,
+                request.Date.Month,
+                1,
+                0,
+                0,
+                0,
+                DateTimeKind.Utc
+            );
+
+            Money amount = new(request.Amount, request.Currency);
+
+            var budget =
+                await context.Budgets.FirstOrDefaultAsync(
+                    b =>
+                        b.UserId == request.UserId
+                        && b.CategoryId == request.CategoryId
+                        && b.Month == month,
+                    cancellationToken
+                )
+                ?? throw new NotFoundException(
+                    nameof(Budget),
+                    new { request.CategoryId, Month = month }
+                );
+
+            // Change this when adding proper currency handling
+            var query = context.Transactions.Where(t =>
+                t.UserId == request.UserId && t.CategoryId == request.CategoryId && t.Month == month
+            );
+
+            var totalMonthlyExpense = await query
+                .Where(t => t.Type == TransactionType.Expense)
+                .SumAsync(t => t.Amount.Amount, cancellationToken);
+
+            var totalMonthlyIncome = await query
+                .Where(t => t.Type == TransactionType.Income)
+                .SumAsync(t => t.Amount.Amount, cancellationToken);
+
+            Money currentBallance = new(totalMonthlyIncome - totalMonthlyExpense, request.Currency);
+
+            budget.VerifySufficientFunds(amount, currentBallance);
+
+            var transaction = Transaction.Create(
+                request.UserId,
+                request.Name,
+                amount,
+                request.CategoryId,
+                request.Date,
+                request.Type
+            );
+
+            await context.Transactions.AddAsync(transaction, cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
+
+            return mapper.Map<TransactionResponse>(transaction);
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Transactions\Commands\CreateTransaction\CreateTransactionCommandValidator.cs ---
+using FinanceTracker.Domain.Entities;
+using FluentValidation;
+
+namespace FinanceTracker.Application.Features.Transactions.Commands.CreateTransaction
+{
+    public class CreateTransactionCommandValidator : AbstractValidator<CreateTransactionCommand>
+    {
+        public CreateTransactionCommandValidator()
+        {
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+
+            RuleFor(v => v.Name)
+                .NotEmpty()
+                .WithMessage("Transaction name is required.")
+                .MaximumLength(100)
+                .WithMessage("Transaction name must not exceed 100 characters.");
+
+            RuleFor(x => x.Amount).GreaterThan(0).WithMessage("Amount must be a positive value.");
+
+            RuleFor(x => x.Currency)
+                .NotEmpty()
+                .Length(3)
+                .WithMessage("Currency must be a valid 3-character code.")
+                .Must(c => c.All(char.IsLetter))
+                .WithMessage("Currency must contain only letters.");
+
+            RuleFor(x => x.CategoryId).NotEmpty().WithMessage("Category is required.");
+
+            RuleFor(v => v.Date).NotEmpty().WithMessage("Date is required.");
+
+            RuleFor(v => v.Type)
+                .Must(t => t == TransactionType.Income || t == TransactionType.Expense)
+                .WithMessage("The transaction type must be either Income or Expense.");
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Transactions\Commands\DeleteTransaction\DeleteTransactionCommand.cs ---
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Transactions.Commands.DeleteTransaction
+{
+    public record DeleteTransactionCommand(Guid UserId, Guid TransactionId) : IRequest<Unit> { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Transactions\Commands\DeleteTransaction\DeleteTransactionCommandHandler.cs ---
+using FinanceTracker.Application.Common.Exceptions;
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Transactions.Commands.DeleteTransaction
+{
+    public class DeleteTransactionCommandHandler(IAppDbContext context)
+        : IRequestHandler<DeleteTransactionCommand, Unit>
+    {
+        public async Task<Unit> Handle(
+            DeleteTransactionCommand request,
+            CancellationToken cancellationToken
+        )
+        {
+            var transaction =
+                await context.Transactions.FirstOrDefaultAsync(
+                    t => t.UserId == request.UserId && t.Id == request.TransactionId,
+                    cancellationToken
+                )
+                ?? throw new NotFoundException(nameof(Transaction), new { request.TransactionId });
+
+            context.Transactions.Remove(transaction);
+            await context.SaveChangesAsync(cancellationToken);
+
+            return Unit.Value;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Transactions\Commands\DeleteTransaction\DeleteTransactionCommandValidator.cs ---
+using FluentValidation;
+
+namespace FinanceTracker.Application.Features.Transactions.Commands.DeleteTransaction
+{
+    public class DeleteTransactionCommandValidator : AbstractValidator<DeleteTransactionCommand>
+    {
+        public DeleteTransactionCommandValidator()
+        {
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required");
+
+            RuleFor(x => x.TransactionId).NotEmpty().WithMessage("TransactionId is required");
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Transactions\Commands\UpdateTransaction\UpdateTransactionCommand.cs ---
+using FinanceTracker.Domain.Entities;
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Transactions.Commands.UpdateTransaction
+{
+    public record UpdateTransactionCommand(
+        Guid Id,
+        Guid UserId,
+        string Name,
+        decimal Amount,
+        string Currency,
+        Guid CategoryId,
+        DateTime Date,
+        TransactionType Type
+    ) : IRequest<Unit> { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Transactions\Commands\UpdateTransaction\UpdateTransactionCommandHandler.cs ---
+using FinanceTracker.Application.Common.Exceptions;
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using FinanceTracker.Domain.ValueObjects;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Transactions.Commands.UpdateTransaction
+{
+    public class UpdateTransactionCommandHandler(IAppDbContext context)
+        : IRequestHandler<UpdateTransactionCommand, Unit>
+    {
+        public async Task<Unit> Handle(
+            UpdateTransactionCommand request,
+            CancellationToken cancellationToken
+        )
+        {
+            DateTime month = new(
+                request.Date.Year,
+                request.Date.Month,
+                1,
+                0,
+                0,
+                0,
+                DateTimeKind.Utc
+            );
+
+            Money amount = new(request.Amount, request.Currency);
+
+            var budget =
+                await context.Budgets.FirstOrDefaultAsync(
+                    b =>
+                        b.UserId == request.UserId
+                        && b.CategoryId == request.CategoryId
+                        && b.Month == month,
+                    cancellationToken
+                )
+                ?? throw new NotFoundException(
+                    nameof(Budget),
+                    new { request.CategoryId, Month = month }
+                );
+            ;
+
+            // Change this when adding proper currency handling
+            var query = context.Transactions.Where(t =>
+                t.UserId == request.UserId
+                && t.CategoryId == request.CategoryId
+                && t.Month == month
+                && t.Id != request.Id
+            );
+
+            var totalMonthlyExpense = await query
+                .Where(t => t.Type == TransactionType.Expense)
+                .SumAsync(t => t.Amount.Amount, cancellationToken);
+
+            var totalMonthlyIncome = await query
+                .Where(t => t.Type == TransactionType.Income)
+                .SumAsync(t => t.Amount.Amount, cancellationToken);
+
+            Money currentBallance = new(totalMonthlyIncome - totalMonthlyExpense, request.Currency);
+
+            budget.VerifySufficientFunds(amount, currentBallance);
+
+            var transaction =
+                await context.Transactions.FirstOrDefaultAsync(
+                    t => t.UserId == request.UserId && t.Id == request.Id,
+                    cancellationToken
+                ) ?? throw new NotFoundException(nameof(Transaction), new { request.Id });
+
+            transaction.UpdateName(request.Name);
+            transaction.UpdateAmount(new Money(request.Amount, request.Currency));
+            transaction.UpdateCategory(request.CategoryId);
+            transaction.UpdateDate(request.Date);
+            transaction.UpdateType(request.Type);
+
+            context.Transactions.Update(transaction);
+
+            await context.SaveChangesAsync(cancellationToken);
+
+            return Unit.Value;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Transactions\Commands\UpdateTransaction\UpdateTransactionCommandValidator.cs ---
+using FinanceTracker.Domain.Entities;
+using FluentValidation;
+
+namespace FinanceTracker.Application.Features.Transactions.Commands.UpdateTransaction
+{
+    public class UpdateTransactionCommandValidator : AbstractValidator<UpdateTransactionCommand>
+    {
+        public UpdateTransactionCommandValidator()
+        {
+            RuleFor(x => x.Id).NotEmpty().WithMessage("Id is required.");
+
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+
+            RuleFor(v => v.Name)
+                .NotEmpty()
+                .WithMessage("Transaction name is required.")
+                .MaximumLength(100)
+                .WithMessage("Transaction name must not exceed 100 characters.");
+
+            RuleFor(x => x.Amount).GreaterThan(0).WithMessage("Amount must be a positive value.");
+
+            RuleFor(x => x.Currency)
+                .NotEmpty()
+                .Length(3)
+                .WithMessage("Currency must be a valid 3-character code.")
+                .Must(c => c.All(char.IsLetter))
+                .WithMessage("Currency must contain only letters.");
+
+            RuleFor(x => x.CategoryId).NotEmpty().WithMessage("Category is required.");
+
+            RuleFor(v => v.Date).NotEmpty().WithMessage("Date is required.");
+
+            RuleFor(v => v.Type)
+                .Must(t => t == TransactionType.Income || t == TransactionType.Expense)
+                .WithMessage("The transaction type must be either Income or Expense.");
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Transactions\Queries\GetTransactionById\GetTransactionByIdQuery.cs ---
+using FinanceTracker.Application.Common.DTOs.Transactions;
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Transactions.Queries.GetTransactionById
+{
+    public record GetTransactionByIdQuery(Guid UserId, Guid TransactionId)
+        : IRequest<TransactionResponse> { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Transactions\Queries\GetTransactionById\GetTransactionByIdQueryHandler.cs ---
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using FinanceTracker.Application.Common.DTOs.Transactions;
+using FinanceTracker.Application.Common.Exceptions;
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Transactions.Queries.GetTransactionById
+{
+    public class GetTransactionByIdQueryHandler(IAppDbContext context, IMapper mapper)
+        : IRequestHandler<GetTransactionByIdQuery, TransactionResponse>
+    {
+        public async Task<TransactionResponse> Handle(
+            GetTransactionByIdQuery request,
+            CancellationToken cancellationToken
+        )
+        {
+            var transactionResponse =
+                await context
+                    .Transactions.Where(t =>
+                        t.UserId == request.UserId && t.Id == request.TransactionId
+                    )
+                    .ProjectTo<TransactionResponse>(mapper.ConfigurationProvider)
+                    .FirstOrDefaultAsync(cancellationToken)
+                ?? throw new NotFoundException(nameof(Transaction), new { request.TransactionId });
+
+            return transactionResponse;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Transactions\Queries\GetTransactionById\GetTransactionByIdQueryValidator.cs ---
+using FluentValidation;
+
+namespace FinanceTracker.Application.Features.Transactions.Queries.GetTransactionById
+{
+    public class GetTransactionByIdQueryValidator : AbstractValidator<GetTransactionByIdQuery>
+    {
+        public GetTransactionByIdQueryValidator()
+        {
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+
+            RuleFor(x => x.TransactionId).NotEmpty().WithMessage("TransactionId is required.");
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Transactions\Queries\GetTransactions\GetTransactionsQuery.cs ---
+using FinanceTracker.Application.Common.DTOs.Transactions;
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Transactions.Queries.GetTransactions
+{
+    public record GetTransactionsQuery(Guid UserId)
+        : IRequest<IReadOnlyCollection<TransactionResponse>> { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Transactions\Queries\GetTransactions\GetTransactionsQueryHandler.cs ---
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using FinanceTracker.Application.Common.DTOs.Transactions;
+using FinanceTracker.Application.Common.Interfaces;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Transactions.Queries.GetTransactions
+{
+    public class GetTransactionsQueryHandler(IAppDbContext context, IMapper mapper)
+        : IRequestHandler<GetTransactionsQuery, IReadOnlyCollection<TransactionResponse>>
+    {
+        public async Task<IReadOnlyCollection<TransactionResponse>> Handle(
+            GetTransactionsQuery request,
+            CancellationToken cancellationToken
+        )
+        {
+            return await context
+                .Transactions.Where(t => t.UserId == request.UserId)
+                .ProjectTo<TransactionResponse>(mapper.ConfigurationProvider)
+                .ToListAsync(cancellationToken);
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Transactions\Queries\GetTransactions\GetTransactionsQueryValidator.cs ---
+using FluentValidation;
+
+namespace FinanceTracker.Application.Features.Transactions.Queries.GetTransactions
+{
+    public class GetTransactionsQueryValidator : AbstractValidator<GetTransactionsQuery>
+    {
+        public GetTransactionsQueryValidator()
+        {
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Users\Commands\CreateUser\CreateUserCommand.cs ---
+using FinanceTracker.Application.Common.DTOs.Users;
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Users.Commands.CreateUser
+{
+    public record CreateUserCommand(string IdentityUserId, string Name, string Email)
+        : IRequest<UserResponse> { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Users\Commands\CreateUser\CreateUserCommandHandler.cs ---
+using AutoMapper;
+using FinanceTracker.Application.Common.DTOs.Users;
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Users.Commands.CreateUser
+{
+    public class CreateUserCommandHandler(IAppDbContext context, IMapper mapper)
+        : IRequestHandler<CreateUserCommand, UserResponse>
+    {
+        public async Task<UserResponse> Handle(
+            CreateUserCommand request,
+            CancellationToken cancellationToken
+        )
+        {
+            var user = User.Create(request.IdentityUserId, request.Name, request.Email);
+
+            await context.Users.AddAsync(user, cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
+
+            return mapper.Map<UserResponse>(user);
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Users\Commands\CreateUser\CreateUserCommandValidator.cs ---
+using FinanceTracker.Application.Common.Interfaces;
+using FluentValidation;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Users.Commands.CreateUser
+{
+    public class CreateUserCommandValidator : AbstractValidator<CreateUserCommand>
+    {
+        private readonly IAppDbContext _context;
+
+        public CreateUserCommandValidator(IAppDbContext context)
+        {
+            _context = context;
+
+            RuleFor(x => x.IdentityUserId)
+                .NotEmpty()
+                .WithMessage("The Identity User ID is required to link the account.")
+                .MustAsync(BeUniqueIdentityId)
+                .WithMessage("The Identity User ID must be unique.");
+
+            RuleFor(x => x.Name)
+                .NotEmpty()
+                .WithMessage("Name is required.")
+                .MaximumLength(100)
+                .WithMessage("Name must not exceed 100 characters.");
+
+            RuleFor(x => x.Email)
+                .NotEmpty()
+                .WithMessage("Email is required.")
+                .EmailAddress()
+                .WithMessage("A valid email address format is required.")
+                .MaximumLength(200)
+                .WithMessage("Email must not exceed 200 characters.")
+                .MustAsync(BeUniqueEmail)
+                .WithMessage("Email must be unique.");
+        }
+
+        private async Task<bool> BeUniqueIdentityId(
+            string identityId,
+            CancellationToken cancellationToken
+        )
+        {
+            return !await _context.Users.AnyAsync(
+                u => u.IdentityUserId == identityId,
+                cancellationToken
+            );
+        }
+
+        private async Task<bool> BeUniqueEmail(string email, CancellationToken cancellationToken)
+        {
+            return !await _context.Users.AnyAsync(u => u.Email == email, cancellationToken);
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Users\Commands\DeleteUser\DeleteUserCommand.cs ---
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Users.Commands.DeleteUser
+{
+    public record DeleteUserCommand(Guid UserId) : IRequest<Unit>;
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Users\Commands\DeleteUser\DeleteUserCommandHandler.cs ---
+using FinanceTracker.Application.Common.Exceptions;
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Users.Commands.DeleteUser
+{
+    public class DeleteUserCommandHandler(IAppDbContext context)
+        : IRequestHandler<DeleteUserCommand, Unit>
+    {
+        public async Task<Unit> Handle(
+            DeleteUserCommand request,
+            CancellationToken cancellationToken
+        )
+        {
+            var transactions = await context
+                .Transactions.Where(t => t.UserId == request.UserId)
+                .ToListAsync(cancellationToken);
+
+            var budgets = await context
+                .Budgets.Where(b => b.UserId == request.UserId)
+                .ToListAsync(cancellationToken);
+
+            var categories = await context
+                .Categories.Where(c => c.UserId == request.UserId)
+                .ToListAsync(cancellationToken);
+
+            var user =
+                await context.Users.FirstOrDefaultAsync(
+                    u => u.Id == request.UserId,
+                    cancellationToken
+                ) ?? throw new NotFoundException(nameof(User), new { request.UserId });
+
+            context.Transactions.RemoveRange(transactions);
+            context.Budgets.RemoveRange(budgets);
+            context.Categories.RemoveRange(categories);
+            context.Users.Remove(user);
+
+            await context.SaveChangesAsync(cancellationToken);
+
+            return Unit.Value;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Users\Commands\DeleteUser\DeleteUserCommandValidator.cs ---
+using FluentValidation;
+
+namespace FinanceTracker.Application.Features.Users.Commands.DeleteUser
+{
+    public class DeleteUserCommandValidator : AbstractValidator<DeleteUserCommand>
+    {
+        public DeleteUserCommandValidator()
+        {
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("User ID is required.");
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Users\Commands\UpdateUser\UpdateUserCommand.cs ---
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Users.Commands.UpdateUser
+{
+    public record UpdateUserCommand(Guid Id, string Name, string Email) : IRequest<Unit> { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Users\Commands\UpdateUser\UpdateUserCommandHandler.cs ---
+using FinanceTracker.Application.Common.Exceptions;
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Users.Commands.UpdateUser
+{
+    public class UpdateUserCommandHandler(IAppDbContext context)
+        : IRequestHandler<UpdateUserCommand, Unit>
+    {
+        public async Task<Unit> Handle(
+            UpdateUserCommand request,
+            CancellationToken cancellationToken
+        )
+        {
+            /*
+            
+            */
+
+            var user =
+                await context.Users.FirstOrDefaultAsync(u => u.Id == request.Id, cancellationToken)
+                ?? throw new NotFoundException(nameof(User), new { request.Id });
+
+            user.UpdateName(request.Name);
+            user.UpdateEmail(request.Email);
+
+            context.Users.Update(user);
+            await context.SaveChangesAsync(cancellationToken);
+
+            return Unit.Value;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Users\Commands\UpdateUser\UpdateUserCommandValidator.cs ---
+using FinanceTracker.Application.Common.Interfaces;
+using FluentValidation;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Users.Commands.UpdateUser
+{
+    public class UpdateUserCommandValidator : AbstractValidator<UpdateUserCommand>
+    {
+        private readonly IAppDbContext _context;
+
+        public UpdateUserCommandValidator(IAppDbContext context)
+        {
+            _context = context;
+
+            RuleFor(x => x.Id).NotEmpty().WithMessage("User ID is required.");
+
+            RuleFor(x => x.Name)
+                .NotEmpty()
+                .WithMessage("Name is required.")
+                .MaximumLength(100)
+                .WithMessage("Name must not exceed 100 characters.");
+
+            RuleFor(x => x.Email)
+                .NotEmpty()
+                .WithMessage("Email is required.")
+                .EmailAddress()
+                .WithMessage("A valid email address format is required.")
+                .MaximumLength(200)
+                .WithMessage("Email must not exceed 200 characters.")
+                .MustAsync(BeUniqueEmail)
+                .WithMessage("Email must be unique.");
+        }
+
+        private async Task<bool> BeUniqueEmail(string email, CancellationToken cancellationToken)
+        {
+            return !await _context.Users.AnyAsync(u => u.Email == email, cancellationToken);
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Users\Queries\GetUserById\GetUserByIdQuery.cs ---
+using FinanceTracker.Application.Common.DTOs.Users;
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Users.Queries.GetUserById
+{
+    public record GetUserByIdQuery(Guid UserId) : IRequest<UserResponse> { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Users\Queries\GetUserById\GetUserByIdQueryHandler.cs ---
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using FinanceTracker.Application.Common.DTOs.Users;
+using FinanceTracker.Application.Common.Exceptions;
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Users.Queries.GetUserById
+{
+    public class GetUserByIdQueryHandler(IAppDbContext context, IMapper mapper)
+        : IRequestHandler<GetUserByIdQuery, UserResponse>
+    {
+        public async Task<UserResponse> Handle(
+            GetUserByIdQuery request,
+            CancellationToken cancellationToken
+        )
+        {
+            var userResponse =
+                await context
+                    .Users.Where(u => u.Id == request.UserId)
+                    .ProjectTo<UserResponse>(mapper.ConfigurationProvider)
+                    .FirstOrDefaultAsync(cancellationToken)
+                ?? throw new NotFoundException(nameof(User), new { request.UserId });
+
+            return userResponse;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Users\Queries\GetUserById\GetUserByIdQueryValidator.cs ---
+using FluentValidation;
+
+namespace FinanceTracker.Application.Features.Users.Queries.GetUserById
+{
+    public class GetUserByIdQueryValidator : AbstractValidator<GetUserByIdQuery>
+    {
+        public GetUserByIdQueryValidator()
+        {
+            RuleFor(x => x.UserId).NotEmpty().WithMessage("User ID is required.");
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Users\Queries\GetUsers\GetUsersQuery.cs ---
+using FinanceTracker.Application.Common.DTOs.Users;
+using MediatR;
+
+namespace FinanceTracker.Application.Features.Users.Queries.GetUsers
+{
+    public record GetUsersQuery : IRequest<IReadOnlyCollection<UserResponse>> { }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Application\Features\Users\Queries\GetUsers\GetUsersQueryHandler.cs ---
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using FinanceTracker.Application.Common.DTOs.Users;
+using FinanceTracker.Application.Common.Interfaces;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Application.Features.Users.Queries.GetUsers
+{
+    public class GetUsersQueryHandler(IAppDbContext context, IMapper mapper)
+        : IRequestHandler<GetUsersQuery, IReadOnlyCollection<UserResponse>>
+    {
+        public async Task<IReadOnlyCollection<UserResponse>> Handle(
+            GetUsersQuery request,
+            CancellationToken cancellationToken
+        )
+        {
+            return await context
+                .Users.ProjectTo<UserResponse>(mapper.ConfigurationProvider)
+                .ToListAsync(cancellationToken);
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Domain\FinanceTracker.Domain.csproj ---
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Domain\Common\IEntity.cs ---
+namespace FinanceTracker.Domain.Common;
+
+public interface IEntity
+{
+    Guid Id { get; }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Domain\Common\IUserOwned.cs ---
+namespace FinanceTracker.Domain.Common
+{
+    public interface IUserOwned
+    {
+        Guid UserId { get; }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Domain\Entities\Budget.cs ---
+using FinanceTracker.Domain.Common;
+using FinanceTracker.Domain.Exceptions;
+using FinanceTracker.Domain.ValueObjects;
+
+namespace FinanceTracker.Domain.Entities
+{
+    public class Budget : IUserOwned, IEntity
+    {
+        public Guid Id { get; init; }
+        public Guid UserId { get; init; }
+        public Guid CategoryId { get; private set; }
+        public Money LimitAmount { get; private set; }
+        public DateTime Month { get; init; }
+        public DateTimeOffset CreatedAt { get; init; }
+        public DateTimeOffset UpdatedAt { get; private set; }
+
+        private Budget() { }
+
+        private Budget(Guid id, Guid userId, Guid categoryId, Money limitAmount, DateTime month)
+        {
+            if (userId == Guid.Empty)
+                throw new DomainException("UserId cannot be empty.", nameof(userId));
+            if (categoryId == Guid.Empty)
+                throw new DomainException("CategoryId cannot be empty.", nameof(categoryId));
+            if (limitAmount.Amount < 0)
+                throw new DomainException("LimitAmount cannot be negative.", nameof(limitAmount));
+
+            Id = id;
+            UserId = userId;
+            CategoryId = categoryId;
+            LimitAmount = limitAmount;
+
+            Month = new DateTime(month.Year, month.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+
+            CreatedAt = DateTimeOffset.UtcNow;
+            UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        public static Budget Create(Guid userId, Guid categoryId, Money limitAmount, DateTime month)
+        {
+            return new Budget(Guid.NewGuid(), userId, categoryId, limitAmount, month);
+        }
+
+        public void UpdateLimitAmount(Money newLimitAmount)
+        {
+            if (newLimitAmount.Amount < 0)
+                throw new DomainException(
+                    "LimitAmount cannot be negative.",
+                    nameof(newLimitAmount)
+                );
+
+            LimitAmount = newLimitAmount;
+            UpdateTimestamp();
+        }
+
+        public void UpdateCategory(Guid newCategoryId)
+        {
+            if (newCategoryId == Guid.Empty)
+                throw new DomainException("CategoryId cannot be empty.", nameof(newCategoryId));
+
+            CategoryId = newCategoryId;
+            UpdateTimestamp();
+        }
+
+        private void UpdateTimestamp()
+        {
+            UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        public void VerifySufficientFunds(Money newTransactionAmount, Money currentBallance)
+        {
+            if (newTransactionAmount.Amount < 0)
+                throw new DomainException(
+                    "Transaction amount cannot be negative.",
+                    nameof(newTransactionAmount)
+                );
+
+            var projectedTotal = currentBallance.Add(newTransactionAmount);
+
+            if (projectedTotal.Amount > LimitAmount.Amount)
+                throw new BudgetExceededException(
+                    $"Adding this transaction would exceed the budget limit of {LimitAmount.Amount} {LimitAmount.Currency}."
+                );
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Domain\Entities\Category.cs ---
+using FinanceTracker.Domain.Common;
+using FinanceTracker.Domain.Exceptions;
+
+namespace FinanceTracker.Domain.Entities
+{
+    public class Category : IUserOwned, IEntity
+    {
+        public Guid Id { get; init; }
+
+        public Guid UserId { get; init; }
+
+        public string Name { get; private set; }
+
+        public string Icon { get; private set; }
+
+        public string Color { get; private set; }
+
+        public DateTimeOffset CreatedAt { get; init; }
+
+        public DateTimeOffset UpdatedAt { get; private set; }
+
+        private Category() { }
+
+        private Category(Guid id, Guid userId, string name, string icon, string color)
+        {
+            if (userId == Guid.Empty)
+                throw new DomainException("UserId cannot be empty.", nameof(userId));
+            if (string.IsNullOrWhiteSpace(name))
+                throw new DomainException("Name cannot be null or whitespace.", nameof(name));
+
+            Id = id;
+            UserId = userId;
+            Name = name;
+            Icon = icon;
+            Color = color;
+            CreatedAt = DateTimeOffset.UtcNow;
+            UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        public static Category Create(Guid userId, string name, string icon, string color)
+        {
+            return new Category(Guid.NewGuid(), userId, name, icon, color);
+        }
+
+        public void UpdateName(string newName)
+        {
+            if (string.IsNullOrWhiteSpace(newName))
+                throw new DomainException("Name cannot be null or whitespace.", nameof(newName));
+
+            Name = newName;
+            UpdateTimestamp();
+        }
+
+        public void UpdateIcon(string newIcon)
+        {
+            if (string.IsNullOrWhiteSpace(newIcon))
+                throw new DomainException("Icon cannot be null or whitespace.", nameof(newIcon));
+
+            Icon = newIcon;
+            UpdateTimestamp();
+        }
+
+        public void UpdateColor(string newColor)
+        {
+            Color = newColor;
+            UpdateTimestamp();
+        }
+
+        private void UpdateTimestamp()
+        {
+            UpdatedAt = DateTimeOffset.UtcNow;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Domain\Entities\Transaction.cs ---
+using FinanceTracker.Domain.Common;
+using FinanceTracker.Domain.Exceptions;
+using FinanceTracker.Domain.ValueObjects;
+
+namespace FinanceTracker.Domain.Entities
+{
+    public enum TransactionType
+    {
+        Income,
+        Expense,
+    }
+
+    public class Transaction : IUserOwned, IEntity
+    {
+        public Guid Id { get; init; }
+        public Guid UserId { get; init; }
+        public string Name { get; private set; }
+        public Money Amount { get; private set; }
+        public Guid CategoryId { get; private set; }
+        public DateTime Date { get; private set; }
+        public DateTime Month { get; private set; }
+        public TransactionType Type { get; private set; }
+        public DateTimeOffset CreatedAt { get; init; }
+        public DateTimeOffset UpdatedAt { get; private set; }
+
+        private Transaction() { }
+
+        private Transaction(
+            Guid id,
+            Guid userId,
+            string name,
+            Money amount,
+            Guid categoryId,
+            DateTime date,
+            TransactionType type
+        )
+        {
+            if (userId == Guid.Empty)
+                throw new DomainException("UserId cannot be empty.", nameof(userId));
+            if (string.IsNullOrWhiteSpace(name))
+                throw new DomainException("Name cannot be null or whitespace.", nameof(name));
+            if (categoryId == Guid.Empty)
+                throw new DomainException("CategoryId cannot be empty.", nameof(categoryId));
+
+            Id = id;
+            UserId = userId;
+            Name = name;
+            Amount = amount ?? throw new DomainException("Amount cannot be null.", nameof(amount));
+            CategoryId = categoryId;
+            Date = date;
+            Type = type;
+            CreatedAt = DateTimeOffset.UtcNow;
+            UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        public static Transaction Create(
+            Guid userId,
+            string name,
+            Money amount,
+            Guid categoryId,
+            DateTime date,
+            TransactionType type
+        )
+        {
+            return new Transaction(Guid.NewGuid(), userId, name, amount, categoryId, date, type);
+        }
+
+        public void UpdateAmount(Money newAmount)
+        {
+            Amount =
+                newAmount ?? throw new DomainException("Amount cannot be null.", nameof(newAmount));
+            UpdateTimestamp();
+        }
+
+        public void UpdateName(string newName)
+        {
+            if (string.IsNullOrWhiteSpace(newName))
+                throw new DomainException("Name cannot be null or whitespace.", nameof(newName));
+
+            Name = newName;
+            UpdateTimestamp();
+        }
+
+        public void UpdateCategory(Guid newCategoryId)
+        {
+            if (newCategoryId == Guid.Empty)
+                throw new DomainException("CategoryId cannot be empty.", nameof(newCategoryId));
+
+            CategoryId = newCategoryId;
+            UpdateTimestamp();
+        }
+
+        public void UpdateDate(DateTime newDate)
+        {
+            Date = newDate;
+            UpdateTimestamp();
+        }
+
+        public void UpdateType(TransactionType newType)
+        {
+            Type = newType;
+            UpdateTimestamp();
+        }
+
+        private void UpdateTimestamp()
+        {
+            UpdatedAt = DateTimeOffset.UtcNow;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Domain\Entities\User.cs ---
+using FinanceTracker.Domain.Common;
+using FinanceTracker.Domain.Exceptions;
+
+namespace FinanceTracker.Domain.Entities
+{
+    public class User : IEntity
+    {
+        public Guid Id { get; init; }
+        public string IdentityUserId { get; private set; }
+        public string Name { get; private set; }
+        public string Email { get; private set; }
+        public DateTimeOffset CreatedAt { get; init; }
+        public DateTimeOffset UpdatedAt { get; private set; }
+
+        private User() { }
+
+        private User(Guid id, string identityUserId, string name, string email)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new DomainException("Name cannot be null or whitespace.", nameof(name));
+            if (string.IsNullOrWhiteSpace(identityUserId))
+                throw new DomainException(
+                    "Identity user ID cannot be null or whitespace.",
+                    nameof(name)
+                );
+            if (string.IsNullOrWhiteSpace(email))
+                throw new DomainException("Email cannot be null or whitespace.", nameof(email));
+
+            Id = id;
+            IdentityUserId = identityUserId;
+            Name = name;
+            Email = email;
+            CreatedAt = DateTimeOffset.UtcNow;
+            UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        public static User Create(string identityUserId, string name, string email)
+        {
+            return new User(Guid.NewGuid(), identityUserId, name, email);
+        }
+
+        public void UpdateName(string newName)
+        {
+            if (string.IsNullOrWhiteSpace(newName))
+                throw new DomainException("Name cannot be null or whitespace.", nameof(newName));
+
+            Name = newName;
+            UpdateTimestamp();
+        }
+
+        public void UpdateEmail(string newEmail)
+        {
+            if (string.IsNullOrWhiteSpace(newEmail))
+                throw new DomainException("Email cannot be null or whitespace.", nameof(newEmail));
+
+            Email = newEmail;
+            UpdateTimestamp();
+        }
+
+        private void UpdateTimestamp()
+        {
+            UpdatedAt = DateTimeOffset.UtcNow;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Domain\Events\IDomainEvent.cs ---
+namespace FinanceTracker.Domain.Events
+{
+    public interface IDomainEvent
+    {
+        DateTime OccurredOn { get; }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Domain\Exceptions\BudgetExceededException.cs ---
+namespace FinanceTracker.Domain.Exceptions
+{
+    public class BudgetExceededException : DomainException
+    {
+        public BudgetExceededException(string message)
+            : base(message) { }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Domain\Exceptions\DomainException.cs ---
+namespace FinanceTracker.Domain.Exceptions
+{
+    public class DomainException : Exception
+    {
+        public DomainException(string message)
+            : base(message) { }
+
+        public DomainException(string message, string paramName)
+            : base($"{message} (Parameter: {paramName})") { }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Domain\Exceptions\InvalidCurrencyException.cs ---
+namespace FinanceTracker.Domain.Exceptions
+{
+    public class InvalidCurrencyException : DomainException
+    {
+        public InvalidCurrencyException(string? invalidCurrency)
+            : base(
+                $"The currency code '{invalidCurrency}' is invalid. It must be exactly 3 letters (e.g., USD, PLN)."
+            ) { }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Infrastructure\DependencyInjection.cs ---
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace FinanceTracker.Infrastructure
+{
+    public static class DependencyInjection
+    {
+        public static IServiceCollection AddInfrastructureServices(
+            this IServiceCollection services,
+            IConfiguration configuration
+        )
+        {
+            services.AddDbContext<AppDbContext>(options =>
+                options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"))
+            );
+
+            services.AddScoped<IAppDbContext>(provider =>
+                provider.GetRequiredService<AppDbContext>()
+            );
+
+            return services;
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Infrastructure\FinanceTracker.Infrastructure.csproj ---
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\FinanceTracker.Domain\FinanceTracker.Domain.csproj" />
+    <ProjectReference Include="..\FinanceTracker.Application\FinanceTracker.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Infrastructure\Persistence\AppDbContext.cs ---
+using System.Reflection;
+using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace FinanceTracker.Infrastructure.Persistence
+{
+    public class AppDbContext(DbContextOptions<AppDbContext> options)
+        : DbContext(options),
+            IAppDbContext
+    {
+        public DbSet<Budget> Budgets => Set<Budget>();
+
+        public DbSet<Category> Categories => Set<Category>();
+
+        public DbSet<Transaction> Transactions => Set<Transaction>();
+
+        public DbSet<User> Users => Set<User>();
+
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            base.OnModelCreating(builder);
+
+            builder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Infrastructure\Persistence\Configurations\BudgetConfiguration.cs ---
+using FinanceTracker.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FinanceTracker.Infrastructure.Persistence.Configurations
+{
+    public class BudgetConfiguration() : IEntityTypeConfiguration<Budget>
+    {
+        public void Configure(EntityTypeBuilder<Budget> builder)
+        {
+            builder.ToTable("Budgets");
+
+            builder.HasKey(b => b.Id);
+
+            builder.ComplexProperty(
+                b => b.LimitAmount,
+                limitBuilder =>
+                {
+                    limitBuilder
+                        .Property(m => m.Amount)
+                        .HasColumnName("LimitAmount")
+                        .HasPrecision(18, 2)
+                        .IsRequired();
+
+                    limitBuilder
+                        .Property(m => m.Currency)
+                        .HasColumnName("Currency")
+                        .HasMaxLength(3)
+                        .IsRequired();
+                }
+            );
+
+            builder.Property(b => b.Month).IsRequired();
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Infrastructure\Persistence\Configurations\CategoryConfiguration.cs ---
+using FinanceTracker.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FinanceTracker.Infrastructure.Persistence.Configurations
+{
+    public class CategoryConfiguration : IEntityTypeConfiguration<Category>
+    {
+        public void Configure(EntityTypeBuilder<Category> builder)
+        {
+            builder.ToTable("Categories");
+
+            builder.HasKey(c => c.Id);
+
+            builder.Property(c => c.Name).HasMaxLength(100).IsRequired();
+
+            builder.Property(c => c.Icon).HasMaxLength(50).IsRequired();
+
+            builder.Property(c => c.Color).HasMaxLength(20).IsRequired();
+
+            builder.HasIndex(c => new { c.UserId, c.Name }).IsUnique();
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Infrastructure\Persistence\Configurations\TransactionConfiguration.cs ---
+using FinanceTracker.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FinanceTracker.Infrastructure.Persistence.Configurations
+{
+    public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
+    {
+        public void Configure(EntityTypeBuilder<Transaction> builder)
+        {
+            builder.ToTable("Transactions");
+            builder.HasKey(t => t.Id);
+
+            builder.Property(t => t.Name).HasMaxLength(100).IsRequired();
+
+            // 1. Map the Value Object
+            builder.ComplexProperty(
+                t => t.Amount,
+                amountBuilder =>
+                {
+                    amountBuilder
+                        .Property(m => m.Amount)
+                        .HasColumnName("Amount")
+                        .HasPrecision(18, 2)
+                        .IsRequired();
+
+                    amountBuilder
+                        .Property(m => m.Currency)
+                        .HasColumnName("Currency")
+                        .HasMaxLength(3)
+                        .IsRequired();
+                }
+            );
+
+            builder
+                .Property(t => t.Month)
+                .HasComputedColumnSql("date_trunc('month', \"Date\")", stored: true);
+
+            builder.Property(t => t.Type).HasConversion<string>().HasMaxLength(20);
+        }
+    }
+}
+
+--- PLIK: C:\Users\micha\Projekty\finance-tracker-api\src\FinanceTracker.Infrastructure\Persistence\Configurations\UserConfiguration.cs ---
+using FinanceTracker.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FinanceTracker.Infrastructure.Persistence.Configurations
+{
+    public class UserConfiguration : IEntityTypeConfiguration<User>
+    {
+        public void Configure(EntityTypeBuilder<User> builder)
+        {
+            builder.ToTable("Users");
+
+            builder.HasKey(u => u.Id);
+
+            builder.Property(u => u.IdentityUserId).HasMaxLength(450).IsRequired();
+
+            builder.Property(u => u.Name).HasMaxLength(100).IsRequired();
+
+            builder.Property(u => u.Email).HasMaxLength(200).IsRequired();
+
+            builder.HasIndex(u => u.IdentityUserId).IsUnique();
+
+            builder.HasIndex(u => u.Email).IsUnique();
+        }
+    }
+}
+

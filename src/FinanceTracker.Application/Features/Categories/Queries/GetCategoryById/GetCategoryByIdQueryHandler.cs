@@ -17,9 +17,9 @@ namespace FinanceTracker.Application.Features.Categories.Queries.GetCategoryById
             CancellationToken cancellationToken
         )
         {
-             var categoryResponse =
+            var categoryResponse =
                 await context
-                    .Categories.Where(c => c.Id == request.CategoryId && c.UserId == request.UserId,)
+                    .Categories.Where(c => c.Id == request.CategoryId && c.UserId == request.UserId)
                     .ProjectTo<CategoryResponse>(mapper.ConfigurationProvider)
                     .FirstOrDefaultAsync(cancellationToken)
                 ?? throw new NotFoundException(nameof(Category), new { request.CategoryId });

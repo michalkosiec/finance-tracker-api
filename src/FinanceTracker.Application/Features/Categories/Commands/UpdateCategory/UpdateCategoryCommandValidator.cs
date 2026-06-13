@@ -1,11 +1,16 @@
+using FinanceTracker.Application.Common.Interfaces;
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 
 namespace FinanceTracker.Application.Features.Categories.Commands.UpdateCategory
 {
     public class UpdateCategoryCommandValidator : AbstractValidator<UpdateCategoryCommand>
     {
-        public UpdateCategoryCommandValidator()
+        private readonly IAppDbContext _context;
+
+        public UpdateCategoryCommandValidator(IAppDbContext context)
         {
+            _context = context;
             RuleFor(x => x.Id).NotEmpty().WithMessage("Category ID is required.");
 
             RuleFor(x => x.UserId).NotEmpty().WithMessage("User ID is required.");
@@ -14,7 +19,9 @@ namespace FinanceTracker.Application.Features.Categories.Commands.UpdateCategory
                 .NotEmpty()
                 .WithMessage("Name is required.")
                 .MaximumLength(100)
-                .WithMessage("Name cannot exceed 100 characters.");
+                .WithMessage("Name cannot exceed 100 characters.")
+                .MustAsync(BeUniqueNameForUser)
+                .WithMessage("Category name must be unique.");
 
             RuleFor(x => x.Icon)
                 .NotEmpty()
@@ -27,6 +34,20 @@ namespace FinanceTracker.Application.Features.Categories.Commands.UpdateCategory
                 .WithMessage("Color is required.")
                 .Matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")
                 .WithMessage("Color must be a valid hex code (e.g., #FFFFFF or #FFF).");
+        }
+
+        private async Task<bool> BeUniqueNameForUser(
+            UpdateCategoryCommand command,
+            string name,
+            CancellationToken cancellationToken
+        )
+        {
+            bool exists = await _context.Categories.AnyAsync(
+                c => c.UserId == command.UserId && c.Name == name,
+                cancellationToken
+            );
+
+            return !exists;
         }
     }
 }

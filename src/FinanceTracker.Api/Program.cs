@@ -1,5 +1,7 @@
 using System.Text;
 using System.Text.Json.Serialization;
+using FinanceTracker.Application;
+using FinanceTracker.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -7,8 +9,17 @@ using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
+builder.Services.AddApplication();
+builder.Services.AddInfrastructureServices(builder.Configuration);
 
+builder
+    .Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
+
+var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(
@@ -19,15 +30,6 @@ builder.Services.AddCors(options =>
         }
     );
 });
-
-builder.Services.AddOpenApi();
-
-builder
-    .Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-    });
 
 var jwtKey =
     builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key is missing!");
@@ -50,6 +52,8 @@ builder
             ClockSkew = TimeSpan.Zero,
         };
     });
+
+builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
