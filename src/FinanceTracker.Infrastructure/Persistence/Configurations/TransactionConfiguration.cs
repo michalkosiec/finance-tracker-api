@@ -13,7 +13,6 @@ namespace FinanceTracker.Infrastructure.Persistence.Configurations
 
             builder.Property(t => t.Name).HasMaxLength(100).IsRequired();
 
-            // 1. Map the Value Object
             builder.ComplexProperty(
                 t => t.Amount,
                 amountBuilder =>
@@ -34,7 +33,10 @@ namespace FinanceTracker.Infrastructure.Persistence.Configurations
 
             builder
                 .Property(t => t.Month)
-                .HasComputedColumnSql("date_trunc('month', \"Date\")", stored: true);
+                .HasComputedColumnSql(
+                    "date_trunc('month', \"Date\" AT TIME ZONE 'UTC')",
+                    stored: true
+                );
 
             builder.Property(t => t.Type).HasConversion<string>().HasMaxLength(20);
         }

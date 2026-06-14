@@ -1,9 +1,9 @@
 using System.Text;
 using System.Text.Json.Serialization;
+using FinanceTracker.Api.Infrastructure.ExceptionHandling;
 using FinanceTracker.Application;
 using FinanceTracker.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 
@@ -11,6 +11,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructureServices(builder.Configuration);
+
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 builder
     .Services.AddControllers()
@@ -56,6 +59,8 @@ builder
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {
