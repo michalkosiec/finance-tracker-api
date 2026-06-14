@@ -1,44 +1,58 @@
 ![Build and Test](https://github.com/michalkosiec/finance-tracker-api/actions/workflows/dotnet.yml/badge.svg)
 
 # Finance Tracker API
+A containerized REST API for personal finance management. Track incomes and expenses, organize transactions into categories, and define monthly budgets with strict validation rules.
 
-A containerized REST API for personal finance management.
+Quick links
+- Interactive API docs: [http://localhost:5200/scalar](http://localhost:5200/scalar)
+- API base URL: `http://localhost:5200`
 
-Finance Tracker API provides a backend system designed to track incomes and expenses, organize transactions into custom categories, and manage strict monthly budgets. The architecture enforces multi-tenancy at the database level, ensuring full data isolation between users. It features an automated validation engine that guarantees data integrity and applies financial rules—such as blocking expenses that exceed predefined category limits.
+Tech stack
+- Backend: .NET 10 (ASP.NET Core Web API)
+- Database: PostgreSQL 15 (via Docker)
+- Orchestration: Docker + Docker Compose
+- API docs: Scalar / OpenAPI
 
-## Tech Stack Overview
+Documentation
+- Overview: [docs/OVERVIEW.md](docs/OVERVIEW.md)
+- Setup: [docs/SETUP.md](docs/SETUP.md)
+- API reference: [docs/API_REFERENCE.md](docs/API_REFERENCE.md)
+- Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
 
-- **Backend:** .NET 10.0 (ASP.NET Core Web API)
-- **Database:** PostgreSQL 15 + Entity Framework Core 10
-- **Infrastructure:** Docker & Docker Compose
-- **API Documentation:** Scalar (OpenAPI integration)
+Prerequisites
+- Docker and Docker Compose installed
+- (Optional) .NET 10 SDK for local debugging
 
----
+Quickstart (Docker)
+1. Copy the example environment file:
 
-## Getting Started
-
-### 1. Configure the environment
-
-Create your local configuration file by copying the provided template:
-
-```bash
+```powershell
 cp .env.example .env
 ```
 
-_(Optional: Open the `.env` file to customize your database credentials or ports)._
+2. Start services:
 
-### 2. Create the infrastructure
-
-Launch the API server with a command:
-
-```bash
+```powershell
 docker-compose up --build
 ```
 
-### 3. Explore and test the API
+3. Open the API docs in your browser:
 
-Once started you can interact with the api via given access points:
+```text
+http://localhost:5200/scalar
+```
 
-- **Interactive API Reference:** [http://localhost:5200/scalar](http://localhost:5200/scalar)
-- **Direct API Access:** `http://localhost:5200`
-- **Local Database Access:** `localhost:5935`
+Notes
+- Keycloak realm file is available in the `keycloak/` folder; the compose setup will expose an authentication server when enabled.
+- Local DB (Postgres) is exposed at `localhost:5935` by the default compose setup.
+
+Development
+- To run the API locally without containers, open `src/FinanceTracker.Api` in your IDE and run the project with the .NET 10 SDK.
+
+Contributing
+- Open issues or PRs for documentation, bugs, or improvements.
+
+License / Contact
+- License: [LICENSE](LICENSE)
+- Author / Maintainers: See repository metadata or package manifest
