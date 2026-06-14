@@ -6,7 +6,7 @@ namespace FinanceTracker.Application.Common.DTOs.Categories
         string Name,
         string Icon,
         string Color,
-        DateTime CreatedAt,
-        DateTime UpdatedAt
+        DateTimeOffset CreatedAt,
+        DateTimeOffset UpdatedAt
     ) { }
 }

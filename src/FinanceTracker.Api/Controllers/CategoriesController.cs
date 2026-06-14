@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FinanceTracker.Api.Controllers
 {
-    [Authorize]
     public class CategoriesController(ISender mediator) : AppControllerBase(mediator)
     {
         [HttpGet]

@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FinanceTracker.Api.Controllers
 {
-    [Authorize]
     public class StatsController(ISender mediator) : AppControllerBase(mediator)
     {
         [HttpGet("summary")]

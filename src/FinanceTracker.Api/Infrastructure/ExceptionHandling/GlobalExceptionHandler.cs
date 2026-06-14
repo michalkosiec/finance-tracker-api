@@ -42,6 +42,12 @@ namespace FinanceTracker.Api.Infrastructure.ExceptionHandling
                 problemDetails.Title = "Business Rule Violation";
                 problemDetails.Detail = domainException.Message;
             }
+            else if (exception is UnauthorizedException unauthorizedException)
+            {
+                problemDetails.Status = StatusCodes.Status401Unauthorized;
+                problemDetails.Title = "Unauthorized";
+                problemDetails.Detail = unauthorizedException.Message;
+            }
             else
             {
                 problemDetails.Status = StatusCodes.Status500InternalServerError;

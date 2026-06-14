@@ -1,0 +1,42 @@
+{
+  "realm": "finance-tracker",
+  "enabled": true,
+  "registrationAllowed": true,
+  "defaultRoles": ["user"],
+  "clients": [
+    {
+      "clientId": "finance-api",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "secret": "finance-api-secret"
+    },
+    {
+      "clientId": "admin-cli",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "secret": ""
+    }
+  ],
+  "requiredActions": [
+    {
+      "alias": "VERIFY_EMAIL",
+      "enabled": false,
+      "defaultAction": false
+    },
+    {
+      "alias": "UPDATE_PROFILE",
+      "enabled": false,
+      "defaultAction": false
+    }
+  ]
+}

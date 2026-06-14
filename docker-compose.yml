@@ -24,7 +24,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
       - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
-      - Jwt__Key=${JWT_SECRET}
+      - Keycloak__AdminUser=${KEYCLOAK_USER}
+      - Keycloak__AdminPassword=${KEYCLOAK_PASSWORD}
     ports:
       - "${API_PORT}:8080"
     depends_on:
@@ -63,5 +64,22 @@ services:
              done && 
              if [ $$count -eq 60 ]; then echo 'Database did not start in time!'; exit 1; fi"
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.2
+    command: start-dev --import-realm
+    environment:
+      KC_HTTP_PORT: 8080
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: 8081
+      KC_HTTP_ENABLED: "true"
+      KEYCLOAK_ADMIN: ${KEYCLOAK_USER}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_PASSWORD}
+    ports:
+      - "8081:8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+      - ./keycloak/finance-tracker-realm.json:/opt/keycloak/data/import/finance-tracker-realm.json
+
 volumes:
   db_data:
+  keycloak_data:

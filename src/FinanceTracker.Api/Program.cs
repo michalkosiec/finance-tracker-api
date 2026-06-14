@@ -1,4 +1,5 @@
-using System.Text;
+using System.Security.Claims;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using FinanceTracker.Api.Infrastructure.ExceptionHandling;
 using FinanceTracker.Application;
@@ -34,25 +35,58 @@ builder.Services.AddCors(options =>
     );
 });
 
-var jwtKey =
-    builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key is missing!");
-
 builder
-    .Services.AddAuthentication(options =>
-    {
-        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-    })
+    .Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        options.Authority = "http://keycloak:8080/realms/finance-tracker";
+        options.Audience = builder.Configuration["Jwt:Audience"];
+        options.RequireHttpsMetadata = false;
+        options.MetadataAddress =
+            "http://keycloak:8080/realms/finance-tracker/.well-known/openid-configuration";
+
+        options.RefreshOnIssuerKeyNotFound = true;
+
         options.TokenValidationParameters = new TokenValidationParameters
         {
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
-            ValidateIssuer = false,
+            ValidateIssuer = true,
+            ValidIssuers = new[]
+            {
+                builder.Configuration["Jwt:Authority"],
+                "http://localhost:8081/realms/finance-tracker",
+                "http://keycloak:8080/realms/finance-tracker",
+            },
             ValidateAudience = false,
             ValidateLifetime = true,
-            ClockSkew = TimeSpan.Zero,
+            ValidateIssuerSigningKey = true,
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnAuthenticationFailed = context =>
+            {
+                Console.WriteLine($"JWT Authentication failed: {context.Exception.Message}");
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = context =>
+            {
+                var claimsIdentity = context.Principal?.Identity as ClaimsIdentity;
+
+                var realmAccessClaim = claimsIdentity?.FindFirst("realm_access");
+
+                if (realmAccessClaim != null)
+                {
+                    using var realmAccess = JsonDocument.Parse(realmAccessClaim.Value);
+                    if (realmAccess.RootElement.TryGetProperty("roles", out var rolesElement))
+                    {
+                        foreach (var role in rolesElement.EnumerateArray())
+                        {
+                            claimsIdentity!.AddClaim(new Claim(ClaimTypes.Role, role.GetString()!));
+                        }
+                    }
+                }
+                return Task.CompletedTask;
+            },
         };
     });
 

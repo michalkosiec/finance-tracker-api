@@ -1,4 +1,5 @@
 using FinanceTracker.Application.Common.Interfaces;
+using FinanceTracker.Infrastructure.Identity;
 using FinanceTracker.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -20,6 +21,8 @@ namespace FinanceTracker.Infrastructure
             services.AddScoped<IAppDbContext>(provider =>
                 provider.GetRequiredService<AppDbContext>()
             );
+
+            services.AddHttpClient<IIdentityService, KeycloakIdentityService>();
 
             return services;
         }

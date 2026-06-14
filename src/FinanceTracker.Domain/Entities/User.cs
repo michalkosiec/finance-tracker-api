@@ -21,7 +21,7 @@ namespace FinanceTracker.Domain.Entities
             if (string.IsNullOrWhiteSpace(identityUserId))
                 throw new DomainException(
                     "Identity user ID cannot be null or whitespace.",
-                    nameof(name)
+                    nameof(identityUserId)
                 );
             if (string.IsNullOrWhiteSpace(email))
                 throw new DomainException("Email cannot be null or whitespace.", nameof(email));
