@@ -9,15 +9,17 @@ using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using Serilog;
 
+var builder = WebApplication.CreateBuilder(args);
+
+var logPath = Path.Combine(builder.Environment.ContentRootPath, "logs", "app-.txt");
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .WriteTo.Console()
-    .WriteTo.File("logs/app-.txt", rollingInterval: RollingInterval.Day)
+    .WriteTo.File(logPath, rollingInterval: RollingInterval.Day)
     .CreateLogger();
 
 try
 {
-    var builder = WebApplication.CreateBuilder(args);
     builder.Host.UseSerilog();
 
     builder.Services.AddApplication();
