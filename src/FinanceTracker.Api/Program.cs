@@ -7,108 +7,129 @@ using FinanceTracker.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
+using Serilog;
 
-var builder = WebApplication.CreateBuilder(args);
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .WriteTo.Console()
+    .WriteTo.File("logs/app-.txt", rollingInterval: RollingInterval.Day)
+    .CreateLogger();
 
-builder.Services.AddApplication();
-builder.Services.AddInfrastructureServices(builder.Configuration);
+try
+{
+    var builder = WebApplication.CreateBuilder(args);
+    builder.Host.UseSerilog();
 
-builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-builder.Services.AddProblemDetails();
+    builder.Services.AddApplication();
+    builder.Services.AddInfrastructureServices(builder.Configuration);
 
-builder
-    .Services.AddControllers()
-    .AddJsonOptions(options =>
+    builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+    builder.Services.AddProblemDetails();
+
+    builder
+        .Services.AddControllers()
+        .AddJsonOptions(options =>
+        {
+            options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        });
+
+    var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
+    builder.Services.AddCors(options =>
     {
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        options.AddPolicy(
+            name: MyAllowSpecificOrigins,
+            policy =>
+            {
+                policy.WithOrigins("http://localhost:4200").AllowAnyHeader().AllowAnyMethod();
+            }
+        );
     });
 
-var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy(
-        name: MyAllowSpecificOrigins,
-        policy =>
+    builder
+        .Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
         {
-            policy.WithOrigins("http://localhost:4200").AllowAnyHeader().AllowAnyMethod();
-        }
-    );
-});
+            options.Authority = "http://keycloak:8080/realms/finance-tracker";
+            options.Audience = builder.Configuration["Jwt:Audience"];
+            options.RequireHttpsMetadata = false;
+            options.MetadataAddress =
+                "http://keycloak:8080/realms/finance-tracker/.well-known/openid-configuration";
 
-builder
-    .Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.Authority = "http://keycloak:8080/realms/finance-tracker";
-        options.Audience = builder.Configuration["Jwt:Audience"];
-        options.RequireHttpsMetadata = false;
-        options.MetadataAddress =
-            "http://keycloak:8080/realms/finance-tracker/.well-known/openid-configuration";
+            options.RefreshOnIssuerKeyNotFound = true;
 
-        options.RefreshOnIssuerKeyNotFound = true;
-
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidIssuers = new[]
+            options.TokenValidationParameters = new TokenValidationParameters
             {
-                builder.Configuration["Jwt:Authority"],
-                "http://localhost:8081/realms/finance-tracker",
-                "http://keycloak:8080/realms/finance-tracker",
-            },
-            ValidateAudience = false,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-        };
-
-        options.Events = new JwtBearerEvents
-        {
-            OnAuthenticationFailed = context =>
-            {
-                Console.WriteLine($"JWT Authentication failed: {context.Exception.Message}");
-                return Task.CompletedTask;
-            },
-            OnTokenValidated = context =>
-            {
-                var claimsIdentity = context.Principal?.Identity as ClaimsIdentity;
-
-                var realmAccessClaim = claimsIdentity?.FindFirst("realm_access");
-
-                if (realmAccessClaim != null)
+                ValidateIssuer = true,
+                ValidIssuers = new[]
                 {
-                    using var realmAccess = JsonDocument.Parse(realmAccessClaim.Value);
-                    if (realmAccess.RootElement.TryGetProperty("roles", out var rolesElement))
+                    builder.Configuration["Jwt:Authority"],
+                    "http://localhost:8081/realms/finance-tracker",
+                    "http://keycloak:8080/realms/finance-tracker",
+                },
+                ValidateAudience = false,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+            };
+
+            options.Events = new JwtBearerEvents
+            {
+                OnAuthenticationFailed = context =>
+                {
+                    Log.Warning(context.Exception, "JWT Authentication failed");
+                    return Task.CompletedTask;
+                },
+                OnTokenValidated = context =>
+                {
+                    var claimsIdentity = context.Principal?.Identity as ClaimsIdentity;
+
+                    var realmAccessClaim = claimsIdentity?.FindFirst("realm_access");
+
+                    if (realmAccessClaim != null)
                     {
-                        foreach (var role in rolesElement.EnumerateArray())
+                        using var realmAccess = JsonDocument.Parse(realmAccessClaim.Value);
+                        if (realmAccess.RootElement.TryGetProperty("roles", out var rolesElement))
                         {
-                            claimsIdentity!.AddClaim(new Claim(ClaimTypes.Role, role.GetString()!));
+                            foreach (var role in rolesElement.EnumerateArray())
+                            {
+                                claimsIdentity!.AddClaim(
+                                    new Claim(ClaimTypes.Role, role.GetString()!)
+                                );
+                            }
                         }
                     }
-                }
-                return Task.CompletedTask;
-            },
-        };
-    });
+                    return Task.CompletedTask;
+                },
+            };
+        });
 
-builder.Services.AddOpenApi();
+    builder.Services.AddOpenApi();
 
-var app = builder.Build();
+    var app = builder.Build();
 
-app.UseExceptionHandler();
+    app.UseExceptionHandler();
 
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-    app.MapScalarApiReference();
+    if (app.Environment.IsDevelopment())
+    {
+        app.MapOpenApi();
+        app.MapScalarApiReference();
+    }
+
+    app.UseRouting();
+
+    app.UseCors(MyAllowSpecificOrigins);
+
+    app.UseAuthentication();
+    app.UseAuthorization();
+
+    app.MapControllers();
+
+    app.Run();
 }
-
-app.UseRouting();
-
-app.UseCors(MyAllowSpecificOrigins);
-
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.MapControllers();
-
-app.Run();
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Application terminated unexpectedly");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
