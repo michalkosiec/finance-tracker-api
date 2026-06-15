@@ -31,6 +31,8 @@ services:
     depends_on:
       migration_tool:
         condition: service_completed_successfully
+    volumes:
+      - ./logs:/app/logs
 
   migration_tool:
     image: mcr.microsoft.com/dotnet/sdk:10.0

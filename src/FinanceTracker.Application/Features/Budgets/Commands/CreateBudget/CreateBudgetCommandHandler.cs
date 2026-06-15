@@ -15,11 +15,17 @@ namespace FinanceTracker.Application.Features.Budgets.Commands.CreateBudget
             CancellationToken cancellationToken
         )
         {
+            var monthDate = DateTime.ParseExact(
+                request.Month,
+                "yyyy-MM",
+                System.Globalization.CultureInfo.InvariantCulture
+            );
+
             var budget = Budget.Create(
                 request.UserId,
                 request.CategoryId,
                 new Money(request.LimitAmount, request.Currency),
-                request.Month
+                monthDate
             );
 
             context.Budgets.Add(budget);

@@ -30,8 +30,14 @@ namespace FinanceTracker.Application.Features.Budgets.Commands.UpdateBudget
             RuleFor(x => x.Month)
                 .NotEmpty()
                 .WithMessage("Month is required.")
-                .Must(m => m.Day == 1)
-                .WithMessage("Month must be the first day of the month.");
+                .Matches(@"^\d{4}-\d{2}$")
+                .WithMessage("Month must be in YYYY-MM format.")
+                .Must(m => {
+                    if (!DateTime.TryParseExact(m, "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _))
+                        return false;
+                    return true;
+                })
+                .WithMessage("Month must be a valid date in YYYY-MM format.");
         }
     }
 }

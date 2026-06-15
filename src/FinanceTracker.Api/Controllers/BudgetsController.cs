@@ -83,14 +83,14 @@ namespace FinanceTracker.Api.Controllers
             Guid CategoryId,
             decimal LimitAmount,
             string Currency,
-            DateTime Month
+            string Month
         );
 
         public record UpdateBudgetRequest(
             Guid CategoryId,
             decimal LimitAmount,
             string Currency,
-            DateTime Month
+            string Month
         );
     }
 }

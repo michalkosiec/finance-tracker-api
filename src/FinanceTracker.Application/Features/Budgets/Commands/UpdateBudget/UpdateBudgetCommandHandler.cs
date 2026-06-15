@@ -21,6 +21,7 @@ namespace FinanceTracker.Application.Features.Budgets.Commands.UpdateBudget
 
             budget.UpdateLimitAmount(new Money(request.LimitAmount, request.Currency));
             budget.UpdateCategory(request.CategoryId);
+            // Note: Month is immutable in the domain model, so it cannot be updated
 
             await context.SaveChangesAsync(cancellationToken);
 

@@ -8,6 +8,6 @@ namespace FinanceTracker.Application.Features.Budgets.Commands.UpdateBudget
         Guid CategoryId,
         decimal LimitAmount,
         string Currency,
-        DateTime Month
+        string Month
     ) : IRequest<Unit> { }
 }
