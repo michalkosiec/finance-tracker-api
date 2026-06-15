@@ -8,7 +8,13 @@ namespace FinanceTracker.Application.Common.Profiles
     {
         public TransactionProfile()
         {
-            CreateMap<Transaction, TransactionResponse>();
+            CreateMap<Transaction, TransactionResponse>()
+                .ForCtorParam("Amount", opt => opt.MapFrom(src => src.Amount.Amount))
+                .ForCtorParam("Currency", opt => opt.MapFrom(src => src.Amount.Currency))
+                .ForCtorParam("Date", opt => opt.MapFrom(src => src.Date))
+                .ForCtorParam("UpdatedAt", opt => opt.MapFrom(src => src.UpdatedAt.UtcDateTime))
+                .ForCtorParam("CreatedAt", opt => opt.MapFrom(src => src.CreatedAt.UtcDateTime));
+            ;
         }
     }
 }

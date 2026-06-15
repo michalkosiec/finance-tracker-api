@@ -29,6 +29,8 @@ namespace FinanceTracker.Application.Features.Categories.Commands.CreateCategory
                 .WithMessage("Icon must be at most 100 characters long.");
 
             RuleFor(x => x.Color)
+                .NotEmpty()
+                .WithMessage("Color is required.")
                 .MaximumLength(20)
                 .WithMessage("Color must be at most 20 characters long.");
         }

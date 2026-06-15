@@ -17,9 +17,15 @@ namespace FinanceTracker.Application.Features.Transactions.Commands.CreateTransa
             CancellationToken cancellationToken
         )
         {
+            var transactionDate = DateTime.ParseExact(
+                request.Date,
+                "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture
+            );
+
             DateTime month = new(
-                request.Date.Year,
-                request.Date.Month,
+                transactionDate.Year,
+                transactionDate.Month,
                 1,
                 0,
                 0,
@@ -64,7 +70,7 @@ namespace FinanceTracker.Application.Features.Transactions.Commands.CreateTransa
                 request.Name,
                 amount,
                 request.CategoryId,
-                request.Date,
+                transactionDate,
                 request.Type
             );
 

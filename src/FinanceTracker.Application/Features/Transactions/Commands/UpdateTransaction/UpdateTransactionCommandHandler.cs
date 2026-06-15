@@ -15,9 +15,15 @@ namespace FinanceTracker.Application.Features.Transactions.Commands.UpdateTransa
             CancellationToken cancellationToken
         )
         {
+            var transactionDate = DateTime.ParseExact(
+                request.Date,
+                "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture
+            );
+
             DateTime month = new(
-                request.Date.Year,
-                request.Date.Month,
+                transactionDate.Year,
+                transactionDate.Month,
                 1,
                 0,
                 0,
@@ -70,7 +76,7 @@ namespace FinanceTracker.Application.Features.Transactions.Commands.UpdateTransa
             transaction.UpdateName(request.Name);
             transaction.UpdateAmount(new Money(request.Amount, request.Currency));
             transaction.UpdateCategory(request.CategoryId);
-            transaction.UpdateDate(request.Date);
+            transaction.UpdateDate(transactionDate);
             transaction.UpdateType(request.Type);
 
             context.Transactions.Update(transaction);

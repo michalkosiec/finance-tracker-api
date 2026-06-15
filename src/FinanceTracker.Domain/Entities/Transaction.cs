@@ -47,7 +47,7 @@ namespace FinanceTracker.Domain.Entities
             Name = name;
             Amount = amount ?? throw new DomainException("Amount cannot be null.", nameof(amount));
             CategoryId = categoryId;
-            Date = date;
+            Date = new DateTime(date.Year, date.Month, date.Day, 0, 0, 0, DateTimeKind.Utc);
             Type = type;
             CreatedAt = DateTimeOffset.UtcNow;
             UpdatedAt = DateTimeOffset.UtcNow;
@@ -92,7 +92,7 @@ namespace FinanceTracker.Domain.Entities
 
         public void UpdateDate(DateTime newDate)
         {
-            Date = newDate;
+            Date =  new DateTime(newDate.Year, newDate.Month, newDate.Day, 0, 0, 0, DateTimeKind.Utc);
             UpdateTimestamp();
         }
 

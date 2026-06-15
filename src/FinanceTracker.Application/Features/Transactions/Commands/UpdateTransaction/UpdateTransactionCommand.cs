@@ -10,7 +10,7 @@ namespace FinanceTracker.Application.Features.Transactions.Commands.UpdateTransa
         decimal Amount,
         string Currency,
         Guid CategoryId,
-        DateTime Date,
+        string Date,
         TransactionType Type
     ) : IRequest<Unit> { }
 }

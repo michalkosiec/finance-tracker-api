@@ -34,8 +34,8 @@ namespace FinanceTracker.Application.Features.Categories.Commands.UpdateCategory
             RuleFor(x => x.Color)
                 .NotEmpty()
                 .WithMessage("Color is required.")
-                .Matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")
-                .WithMessage("Color must be a valid hex code (e.g., #FFFFFF or #FFF).");
+                .MaximumLength(20)
+                .WithMessage("Color must be at most 20 characters long.");
         }
 
         private async Task<bool> BeUniqueNameForUser(

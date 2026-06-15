@@ -96,7 +96,7 @@ namespace FinanceTracker.Api.Controllers
             decimal Amount,
             string Currency,
             Guid CategoryId,
-            DateTime Date,
+            string Date,
             TransactionType Type
         );
 
@@ -105,7 +105,7 @@ namespace FinanceTracker.Api.Controllers
             decimal Amount,
             string Currency,
             Guid CategoryId,
-            DateTime Date,
+            string Date,
             TransactionType Type
         );
     }
