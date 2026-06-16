@@ -11,6 +11,18 @@ namespace FinanceTracker.Infrastructure.Persistence.Configurations
             builder.ToTable("Transactions");
             builder.HasKey(t => t.Id);
 
+            builder
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(b => b.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder
+                .HasOne<Category>()
+                .WithMany()
+                .HasForeignKey(b => b.CategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             builder.Property(t => t.Name).HasMaxLength(100).IsRequired();
 
             builder.ComplexProperty(

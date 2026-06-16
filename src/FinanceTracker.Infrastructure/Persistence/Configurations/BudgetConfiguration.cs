@@ -13,6 +13,18 @@ namespace FinanceTracker.Infrastructure.Persistence.Configurations
 
             builder.HasKey(b => b.Id);
 
+            builder
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(b => b.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder
+                .HasOne<Category>()
+                .WithMany()
+                .HasForeignKey(b => b.CategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             builder.ComplexProperty(
                 b => b.LimitAmount,
                 limitBuilder =>

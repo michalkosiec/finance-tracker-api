@@ -12,6 +12,12 @@ namespace FinanceTracker.Infrastructure.Persistence.Configurations
 
             builder.HasKey(c => c.Id);
 
+            builder
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(b => b.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             builder.Property(c => c.Name).HasMaxLength(100).IsRequired();
 
             builder.Property(c => c.Icon).HasMaxLength(50).IsRequired();
