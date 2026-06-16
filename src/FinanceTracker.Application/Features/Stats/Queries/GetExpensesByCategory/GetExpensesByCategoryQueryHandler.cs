@@ -13,25 +13,39 @@ namespace FinanceTracker.Application.Features.Stats.Queries.GetExpensesByCategor
             CancellationToken cancellationToken
         )
         {
+            var targetDate = new DateTime(
+                request.Year,
+                request.Month,
+                1,
+                0,
+                0,
+                0,
+                DateTimeKind.Utc
+            );
             var query =
                 from t in context.Transactions
                 where
                     t.UserId == request.UserId
-                    && t.Date.Year == request.Year
-                    && t.Date.Month == request.Month
+                    && t.Month == targetDate
                     && t.Type == TransactionType.Expense
                     && t.Amount.Currency == request.Currency
                 join c in context.Categories on t.CategoryId equals c.Id
-                group t by c.Name into groupedData
-                select new CategoryStatResponse(
-                    groupedData.Key,
-                    groupedData.Sum(x => x.Amount.Amount),
-                    groupedData.Count()
-                );
+                select new { CategoryName = c.Name, DecimalAmount = t.Amount.Amount } into flattened
+                group flattened by flattened.CategoryName into groupedData
+                select new
+                {
+                    CategoryName = groupedData.Key,
+                    TotalExpense = groupedData.Sum(x => x.DecimalAmount),
+                    Count = groupedData.Count(),
+                };
 
-            var categoryStats = await query
+            var result = await query
                 .OrderByDescending(x => x.TotalExpense)
                 .ToListAsync(cancellationToken);
+
+            var categoryStats = result
+                .Select(x => new CategoryStatResponse(x.CategoryName, x.TotalExpense, x.Count))
+                .ToList();
 
             return new ExpensesByCategoryResponse(categoryStats, request.Currency);
         }
