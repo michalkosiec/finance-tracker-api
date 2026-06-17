@@ -6,7 +6,6 @@ namespace FinanceTracker.Domain.Entities
     public class User : IEntity
     {
         public Guid Id { get; init; }
-        public string IdentityUserId { get; private set; }
         public string Name { get; private set; }
         public string Email { get; private set; }
         public DateTimeOffset CreatedAt { get; init; }
@@ -14,20 +13,16 @@ namespace FinanceTracker.Domain.Entities
 
         private User() { }
 
-        private User(Guid id, string identityUserId, string name, string email)
+        private User(Guid id, string name, string email)
         {
+            if (id == Guid.Empty)
+                throw new DomainException("Id cannot be empty.", nameof(id));
             if (string.IsNullOrWhiteSpace(name))
                 throw new DomainException("Name cannot be null or whitespace.", nameof(name));
-            if (string.IsNullOrWhiteSpace(identityUserId))
-                throw new DomainException(
-                    "Identity user ID cannot be null or whitespace.",
-                    nameof(identityUserId)
-                );
             if (string.IsNullOrWhiteSpace(email))
                 throw new DomainException("Email cannot be null or whitespace.", nameof(email));
 
             Id = id;
-            IdentityUserId = identityUserId;
             Name = name;
             Email = email;
             CreatedAt = DateTimeOffset.UtcNow;
@@ -36,7 +31,7 @@ namespace FinanceTracker.Domain.Entities
 
         public static User Create(string identityUserId, string name, string email)
         {
-            return new User(Guid.NewGuid(), identityUserId, name, email);
+            return new User(Guid.Parse(identityUserId), name, email);
         }
 
         public void UpdateName(string newName)

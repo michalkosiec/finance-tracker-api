@@ -14,9 +14,7 @@ namespace FinanceTracker.Application.Features.Users.Commands.CreateUser
 
             RuleFor(x => x.IdentityUserId)
                 .NotEmpty()
-                .WithMessage("The Identity User ID is required to link the account.")
-                .MustAsync(BeUniqueIdentityId)
-                .WithMessage("The Identity User ID must be unique.");
+                .WithMessage("The Identity User ID is required to link the account.");
 
             RuleFor(x => x.Name)
                 .NotEmpty()
@@ -33,17 +31,6 @@ namespace FinanceTracker.Application.Features.Users.Commands.CreateUser
                 .WithMessage("Email must not exceed 200 characters.")
                 .MustAsync(BeUniqueEmail)
                 .WithMessage("Email must be unique.");
-        }
-
-        private async Task<bool> BeUniqueIdentityId(
-            string identityId,
-            CancellationToken cancellationToken
-        )
-        {
-            return !await _context.Users.AnyAsync(
-                u => u.IdentityUserId == identityId,
-                cancellationToken
-            );
         }
 
         private async Task<bool> BeUniqueEmail(string email, CancellationToken cancellationToken)

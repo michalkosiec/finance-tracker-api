@@ -12,13 +12,9 @@ namespace FinanceTracker.Infrastructure.Persistence.Configurations
 
             builder.HasKey(u => u.Id);
 
-            builder.Property(u => u.IdentityUserId).HasMaxLength(450).IsRequired();
-
             builder.Property(u => u.Name).HasMaxLength(100).IsRequired();
 
             builder.Property(u => u.Email).HasMaxLength(200).IsRequired();
-
-            builder.HasIndex(u => u.IdentityUserId).IsUnique();
 
             builder.HasIndex(u => u.Email).IsUnique();
         }
