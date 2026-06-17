@@ -55,4 +55,4 @@ Contributing
 
 License / Contact
 - License: [LICENSE](LICENSE)
-- Author: Michał Kosiec
+- Author: [github.com/michalkosiec](https://github.com/michalkosiec)
