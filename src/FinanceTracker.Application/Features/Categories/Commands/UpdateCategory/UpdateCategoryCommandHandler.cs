@@ -23,8 +23,6 @@ namespace FinanceTracker.Application.Features.Categories.Commands.UpdateCategory
             category.UpdateIcon(request.Icon);
             category.UpdateColor(request.Color);
 
-            context.Categories.Update(category);
-
             await context.SaveChangesAsync(cancellationToken);
 
             return Unit.Value;

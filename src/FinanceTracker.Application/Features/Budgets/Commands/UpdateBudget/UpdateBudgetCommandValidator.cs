@@ -26,18 +26,6 @@ namespace FinanceTracker.Application.Features.Budgets.Commands.UpdateBudget
                 .WithMessage("Currency must be a valid 3-character code.")
                 .Must(c => c.All(char.IsLetter))
                 .WithMessage("Currency must contain only letters.");
-
-            RuleFor(x => x.Month)
-                .NotEmpty()
-                .WithMessage("Month is required.")
-                .Matches(@"^\d{4}-\d{2}$")
-                .WithMessage("Month must be in YYYY-MM format.")
-                .Must(m => {
-                    if (!DateTime.TryParseExact(m, "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _))
-                        return false;
-                    return true;
-                })
-                .WithMessage("Month must be a valid date in YYYY-MM format.");
         }
     }
 }

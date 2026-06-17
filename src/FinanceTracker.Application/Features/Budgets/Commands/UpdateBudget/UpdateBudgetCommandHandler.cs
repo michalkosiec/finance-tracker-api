@@ -3,6 +3,7 @@ using FinanceTracker.Application.Common.Interfaces;
 using FinanceTracker.Domain.Entities;
 using FinanceTracker.Domain.ValueObjects;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace FinanceTracker.Application.Features.Budgets.Commands.UpdateBudget
 {
@@ -19,9 +20,26 @@ namespace FinanceTracker.Application.Features.Budgets.Commands.UpdateBudget
                     b.UserId == request.UserId && b.Id == request.Id
                 ) ?? throw new NotFoundException(nameof(Budget), new { request.Id });
 
-            budget.UpdateLimitAmount(new Money(request.LimitAmount, request.Currency));
-            budget.UpdateCategory(request.CategoryId);
-            // Note: Month is immutable in the domain model, so it cannot be updated
+            var query = context.Transactions.Where(t =>
+                t.UserId == request.UserId
+                && t.CategoryId == request.CategoryId
+                && t.Month == budget.Month
+            );
+
+            var totalMonthlyExpense = await query
+                .Where(t => t.Type == TransactionType.Expense)
+                .SumAsync(t => t.Amount.Amount, cancellationToken);
+
+            var totalMonthlyIncome = await query
+                .Where(t => t.Type == TransactionType.Income)
+                .SumAsync(t => t.Amount.Amount, cancellationToken);
+
+            Money currentBallance = new(totalMonthlyIncome - totalMonthlyExpense, request.Currency);
+
+            budget.UpdateLimitAmount(
+                new Money(request.LimitAmount, request.Currency),
+                currentBallance
+            );
 
             await context.SaveChangesAsync(cancellationToken);
 

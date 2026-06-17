@@ -1,5 +1,6 @@
 using AutoMapper;
 using FinanceTracker.Application.Common.DTOs.Budgets;
+using FinanceTracker.Application.Common.Exceptions;
 using FinanceTracker.Application.Common.Interfaces;
 using FinanceTracker.Domain.Entities;
 using FinanceTracker.Domain.ValueObjects;
@@ -15,11 +16,20 @@ namespace FinanceTracker.Application.Features.Budgets.Commands.CreateBudget
             CancellationToken cancellationToken
         )
         {
-            var monthDate = DateTime.ParseExact(
-                request.Month,
-                "yyyy-MM",
-                System.Globalization.CultureInfo.InvariantCulture
-            );
+            if (
+                !DateTime.TryParseExact(
+                    request.Month,
+                    "yyyy-MM",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None,
+                    out var monthDate
+                )
+            )
+            {
+                throw new BadRequestException(
+                    "The provided month is invalid. Please use 'yyyy-MM'."
+                );
+            }
 
             var budget = Budget.Create(
                 request.UserId,

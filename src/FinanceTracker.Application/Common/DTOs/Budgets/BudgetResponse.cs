@@ -7,7 +7,7 @@ namespace FinanceTracker.Application.Common.DTOs.Budgets
         decimal LimitAmount,
         string Currency,
         DateTime Month,
-        DateTime CreatedAt,
-        DateTime UpdatedAt
+        DateTimeOffset CreatedAt,
+        DateTimeOffset UpdatedAt
     ) { }
 }

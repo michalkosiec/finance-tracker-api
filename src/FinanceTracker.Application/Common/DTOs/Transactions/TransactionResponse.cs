@@ -11,7 +11,7 @@ namespace FinanceTracker.Application.Common.DTOs.Transactions
         Guid CategoryId,
         DateTime Date,
         TransactionType Type,
-        DateTime UpdatedAt,
-        DateTime CreatedAt
+        DateTimeOffset UpdatedAt,
+        DateTimeOffset CreatedAt
     ) { }
 }

@@ -14,10 +14,6 @@ namespace FinanceTracker.Application.Features.Users.Commands.UpdateUser
             CancellationToken cancellationToken
         )
         {
-            /*
-            
-            */
-
             var user =
                 await context.Users.FirstOrDefaultAsync(u => u.Id == request.Id, cancellationToken)
                 ?? throw new NotFoundException(nameof(User), new { request.Id });
@@ -25,7 +21,6 @@ namespace FinanceTracker.Application.Features.Users.Commands.UpdateUser
             user.UpdateName(request.Name);
             user.UpdateEmail(request.Email);
 
-            context.Users.Update(user);
             await context.SaveChangesAsync(cancellationToken);
 
             return Unit.Value;

@@ -9,8 +9,6 @@ namespace FinanceTracker.Domain.ValueObjects
 
         public Money(decimal amount, string currency)
         {
-            if (amount < 0)
-                throw new DomainException("Amount cannot be negative.", nameof(amount));
             if (string.IsNullOrWhiteSpace(currency) || currency.Length != 3)
                 throw new InvalidCurrencyException(currency);
 

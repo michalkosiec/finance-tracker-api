@@ -7,7 +7,6 @@ namespace FinanceTracker.Application.Features.Budgets.Commands.UpdateBudget
         Guid UserId,
         Guid CategoryId,
         decimal LimitAmount,
-        string Currency,
-        string Month
+        string Currency
     ) : IRequest<Unit> { }
 }

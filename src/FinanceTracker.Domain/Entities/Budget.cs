@@ -8,7 +8,7 @@ namespace FinanceTracker.Domain.Entities
     {
         public Guid Id { get; init; }
         public Guid UserId { get; init; }
-        public Guid CategoryId { get; private set; }
+        public Guid CategoryId { get; init; }
         public Money LimitAmount { get; private set; }
         public DateTime Month { get; init; }
         public DateTimeOffset CreatedAt { get; init; }
@@ -41,8 +41,12 @@ namespace FinanceTracker.Domain.Entities
             return new Budget(Guid.NewGuid(), userId, categoryId, limitAmount, month);
         }
 
-        public void UpdateLimitAmount(Money newLimitAmount)
+        public void UpdateLimitAmount(Money newLimitAmount, Money currentBallance)
         {
+            if (-currentBallance.Amount > newLimitAmount.Amount)
+                throw new BudgetExceededException(
+                    "Changing the budget's limit amount would have caused the current ballance to exceed the budget."
+                );
             if (newLimitAmount.Amount < 0)
                 throw new DomainException(
                     "LimitAmount cannot be negative.",
@@ -50,15 +54,6 @@ namespace FinanceTracker.Domain.Entities
                 );
 
             LimitAmount = newLimitAmount;
-            UpdateTimestamp();
-        }
-
-        public void UpdateCategory(Guid newCategoryId)
-        {
-            if (newCategoryId == Guid.Empty)
-                throw new DomainException("CategoryId cannot be empty.", nameof(newCategoryId));
-
-            CategoryId = newCategoryId;
             UpdateTimestamp();
         }
 
@@ -75,9 +70,9 @@ namespace FinanceTracker.Domain.Entities
                     nameof(newTransactionAmount)
                 );
 
-            var projectedTotal = currentBallance.Add(newTransactionAmount);
+            var projectedBallance = currentBallance.Subtract(newTransactionAmount);
 
-            if (projectedTotal.Amount > LimitAmount.Amount)
+            if (-projectedBallance.Amount > LimitAmount.Amount)
                 throw new BudgetExceededException(
                     $"Adding this transaction would exceed the budget limit of {LimitAmount.Amount} {LimitAmount.Currency}."
                 );

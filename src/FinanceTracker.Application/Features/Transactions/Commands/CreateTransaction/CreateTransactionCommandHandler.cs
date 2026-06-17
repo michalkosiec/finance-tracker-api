@@ -17,11 +17,20 @@ namespace FinanceTracker.Application.Features.Transactions.Commands.CreateTransa
             CancellationToken cancellationToken
         )
         {
-            var transactionDate = DateTime.ParseExact(
-                request.Date,
-                "yyyy-MM-dd",
-                System.Globalization.CultureInfo.InvariantCulture
-            );
+            if (
+                !DateTime.TryParseExact(
+                    request.Date,
+                    "yyyy-MM-dd",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None,
+                    out var transactionDate
+                )
+            )
+            {
+                throw new BadRequestException(
+                    "The provided date is invalid. Please use 'yyyy-MM-dd'."
+                );
+            }
 
             DateTime month = new(
                 transactionDate.Year,
@@ -48,22 +57,30 @@ namespace FinanceTracker.Application.Features.Transactions.Commands.CreateTransa
                     new { request.CategoryId, Month = month }
                 );
 
-            // Change this when adding proper currency handling
-            var query = context.Transactions.Where(t =>
-                t.UserId == request.UserId && t.CategoryId == request.CategoryId && t.Month == month
-            );
+            if (request.Type == TransactionType.Expense)
+            {
+                // Change this when adding proper currency handling
+                var query = context.Transactions.Where(t =>
+                    t.UserId == request.UserId
+                    && t.CategoryId == request.CategoryId
+                    && t.Month == month
+                );
 
-            var totalMonthlyExpense = await query
-                .Where(t => t.Type == TransactionType.Expense)
-                .SumAsync(t => t.Amount.Amount, cancellationToken);
+                var totalMonthlyExpense = await query
+                    .Where(t => t.Type == TransactionType.Expense)
+                    .SumAsync(t => t.Amount.Amount, cancellationToken);
 
-            var totalMonthlyIncome = await query
-                .Where(t => t.Type == TransactionType.Income)
-                .SumAsync(t => t.Amount.Amount, cancellationToken);
+                var totalMonthlyIncome = await query
+                    .Where(t => t.Type == TransactionType.Income)
+                    .SumAsync(t => t.Amount.Amount, cancellationToken);
 
-            Money currentBallance = new(totalMonthlyIncome - totalMonthlyExpense, request.Currency);
+                Money currentBallance = new(
+                    totalMonthlyIncome - totalMonthlyExpense,
+                    request.Currency
+                );
 
-            budget.VerifySufficientFunds(amount, currentBallance);
+                budget.VerifySufficientFunds(amount, currentBallance);
+            }
 
             var transaction = Transaction.Create(
                 request.UserId,

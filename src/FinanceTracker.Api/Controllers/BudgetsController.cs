@@ -62,8 +62,7 @@ namespace FinanceTracker.Api.Controllers
                 CurrentUserId,
                 request.CategoryId,
                 request.LimitAmount,
-                request.Currency,
-                request.Month
+                request.Currency
             );
 
             await Mediator.Send(command, cancellationToken);
@@ -86,11 +85,6 @@ namespace FinanceTracker.Api.Controllers
             string Month
         );
 
-        public record UpdateBudgetRequest(
-            Guid CategoryId,
-            decimal LimitAmount,
-            string Currency,
-            string Month
-        );
+        public record UpdateBudgetRequest(Guid CategoryId, decimal LimitAmount, string Currency);
     }
 }

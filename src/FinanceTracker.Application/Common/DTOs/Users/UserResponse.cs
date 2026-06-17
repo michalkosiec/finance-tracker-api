@@ -4,7 +4,7 @@ namespace FinanceTracker.Application.Common.DTOs.Users
         Guid Id,
         string Name,
         string Email,
-        DateTime CreatedAt,
-        DateTime UpdatedAt
+        DateTimeOffset CreatedAt,
+        DateTimeOffset UpdatedAt
     ) { }
 }

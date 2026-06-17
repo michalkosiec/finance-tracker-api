@@ -10,10 +10,7 @@ namespace FinanceTracker.Application.Common.Profiles
         {
             CreateMap<Budget, BudgetResponse>()
                 .ForCtorParam("LimitAmount", opt => opt.MapFrom(src => src.LimitAmount.Amount))
-                .ForCtorParam("Currency", opt => opt.MapFrom(src => src.LimitAmount.Currency))
-                .ForCtorParam("CreatedAt", opt => opt.MapFrom(src => src.CreatedAt.UtcDateTime))
-                .ForCtorParam("UpdatedAt", opt => opt.MapFrom(src => src.UpdatedAt.UtcDateTime));
-            ;
+                .ForCtorParam("Currency", opt => opt.MapFrom(src => src.LimitAmount.Currency));
         }
     }
 }

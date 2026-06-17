@@ -48,6 +48,12 @@ namespace FinanceTracker.Api.Infrastructure.ExceptionHandling
                 problemDetails.Title = "Unauthorized";
                 problemDetails.Detail = unauthorizedException.Message;
             }
+            else if (exception is BadRequestException badRequestException)
+            {
+                problemDetails.Status = StatusCodes.Status400BadRequest;
+                problemDetails.Title = "Bad Request";
+                problemDetails.Detail = badRequestException.Message;
+            }
             else
             {
                 problemDetails.Status = StatusCodes.Status500InternalServerError;
