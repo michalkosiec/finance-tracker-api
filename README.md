@@ -55,4 +55,4 @@ Contributing
 
 License / Contact
 - License: [LICENSE](LICENSE)
-- Author / Maintainers: See repository metadata or package manifest
+- Author: Michał Kosiec
