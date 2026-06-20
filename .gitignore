@@ -1,6 +1,7 @@
 .env
 
 scripts/
+database/
 logs/
 
 [Bb]in/

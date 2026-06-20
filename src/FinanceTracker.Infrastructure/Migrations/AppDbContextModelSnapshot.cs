@@ -125,7 +125,7 @@ namespace FinanceTracker.Infrastructure.Migrations
                     b.Property<DateTime>("Month")
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("timestamp with time zone")
-                        .HasComputedColumnSql("date_trunc('month', \"Date\" AT TIME ZONE 'UTC')", true);
+                        .HasComputedColumnSql("date_trunc('month', \"Date\" AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'", true);
 
                     b.Property<string>("Name")
                         .IsRequired()

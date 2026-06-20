@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace FinanceTracker.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class InitialMigration : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -88,7 +88,7 @@ namespace FinanceTracker.Infrastructure.Migrations
                     Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     CategoryId = table.Column<Guid>(type: "uuid", nullable: false),
                     Date = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    Month = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, computedColumnSql: "date_trunc('month', \"Date\" AT TIME ZONE 'UTC')", stored: true),
+                    Month = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, computedColumnSql: "date_trunc('month', \"Date\" AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'", stored: true),
                     Type = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),

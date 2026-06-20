@@ -13,8 +13,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FinanceTracker.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260617131732_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20260619211558_InitialMigration")]
+    partial class InitialMigration
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -128,7 +128,7 @@ namespace FinanceTracker.Infrastructure.Migrations
                     b.Property<DateTime>("Month")
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("timestamp with time zone")
-                        .HasComputedColumnSql("date_trunc('month', \"Date\" AT TIME ZONE 'UTC')", true);
+                        .HasComputedColumnSql("date_trunc('month', \"Date\" AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'", true);
 
                     b.Property<string>("Name")
                         .IsRequired()

@@ -46,7 +46,7 @@ namespace FinanceTracker.Infrastructure.Persistence.Configurations
             builder
                 .Property(t => t.Month)
                 .HasComputedColumnSql(
-                    "date_trunc('month', \"Date\" AT TIME ZONE 'UTC')",
+                    "date_trunc('month', \"Date\" AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'",
                     stored: true
                 );
 
