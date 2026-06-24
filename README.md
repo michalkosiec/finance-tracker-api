@@ -1,5 +1,3 @@
-![Build and Test](https://github.com/michalkosiec/finance-tracker-api/actions/workflows/dotnet.yml/badge.svg)
-
 # Finance Tracker API
 A containerized REST API for personal finance management. Track incomes and expenses, organize transactions into categories, and define monthly budgets with strict validation rules.
 
